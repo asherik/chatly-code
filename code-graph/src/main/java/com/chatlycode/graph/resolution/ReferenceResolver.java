@@ -45,7 +45,9 @@ public final class ReferenceResolver {
                     .ifPresentOrElse(
                             targetId -> resolvedEdges.add(replaceTarget(edge, targetId)),
                             () -> {
-                                unresolved.add(toUnresolved(edge));
+                                if (edge.kind() != EdgeKind.IMPORTS) {
+                                    unresolved.add(toUnresolved(edge));
+                                }
                                 resolvedEdges.add(edge);
                             }
                     );

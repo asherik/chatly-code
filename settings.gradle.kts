@@ -21,6 +21,7 @@ include(
     "shared-kernel",
     "project-domain",
     "language-spi",
+    "language-generic",
     "language-java",
     "code-graph",
     "architecture-engine",

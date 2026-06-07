@@ -50,4 +50,52 @@ class GraphQueryServiceTest {
         assertFalse(answer.summary().isBlank());
         assertTrue(answer.relatedFiles().contains("src/OrderService.java"));
     }
+
+    @Test
+    void ranksModulesBeforeImportsInGenericAnswer() {
+        Instant now = Instant.EPOCH;
+        CodeNode module = new CodeNode(
+                "module-1",
+                NodeKind.MODULE,
+                "memory",
+                "core/src/memory",
+                Path.of("core/src/memory/mod.rs"),
+                "rust",
+                1,
+                1,
+                "",
+                List.of(),
+                now
+        );
+        CodeNode importNode = new CodeNode(
+                "import-1",
+                NodeKind.IMPORT,
+                "chatly_core::memory::MemoryDoc",
+                "chatly_core::memory::MemoryDoc",
+                Path.of("desktop/src-tauri/src/main.rs"),
+                "rust",
+                3,
+                3,
+                "",
+                List.of(),
+                now
+        );
+        CodeGraph graph = new CodeGraph(
+                new ProjectId("p1"),
+                List.of(),
+                List.of(importNode, module),
+                List.of(),
+                List.of(),
+                List.of(),
+                new IndexResult(true, 2, 0, 0, 2, 0, List.of(), Duration.ZERO),
+                now
+        );
+        GraphQueryService queryService = new GraphQueryService();
+
+        GraphAnswer answer = queryService.answerQuestion(graph, "Which modules mention memory?");
+
+        assertFalse(answer.evidence().isEmpty());
+        assertTrue(answer.evidence().getFirst().startsWith("core/src/memory"));
+        assertTrue(answer.relatedFiles().contains("core/src/memory/mod.rs"));
+    }
 }

@@ -9,12 +9,22 @@ import com.chatlycode.shared.id.Ids;
 import com.chatlycode.shared.time.ClockProvider;
 
 import java.nio.file.Files;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
 public final class ProjectScanner {
+
+    private static final Set<String> IGNORE_DIRS = Set.of(
+            ".git", ".chatly-code", "node_modules", "target", "build", "dist", "out",
+            ".next", ".nuxt", ".svelte-kit", ".gradle", ".idea", ".vscode", "coverage"
+    );
 
     private final ProjectRepository repository;
     private final ClockProvider clock;
@@ -49,7 +59,7 @@ public final class ProjectScanner {
         addIfExists(stacks, root, "pom.xml", DetectedStack.MAVEN);
         addIfExists(stacks, root, "Cargo.toml", DetectedStack.RUST);
         addIfExists(stacks, root, "package.json", DetectedStack.TYPESCRIPT);
-        if (Files.isDirectory(root.resolve("src/main/java")) || containsFileWithExtension(root, ".java")) {
+        if (Files.isDirectory(root.resolve("src/main/java"))) {
             stacks.add(DetectedStack.JAVA);
         }
         if (stacks.isEmpty()) {
@@ -65,9 +75,28 @@ public final class ProjectScanner {
     }
 
     private boolean containsFileWithExtension(Path root, String extension) {
-        try (var stream = Files.walk(root, 5)) {
-            return stream.anyMatch(path -> Files.isRegularFile(path) && path.getFileName().toString().endsWith(extension));
-        } catch (Exception ignored) {
+        AtomicBoolean found = new AtomicBoolean(false);
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (!dir.equals(root) && IGNORE_DIRS.contains(dir.getFileName().toString())) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return found.get() ? FileVisitResult.TERMINATE : FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (file.getFileName().toString().endsWith(extension)) {
+                        found.set(true);
+                        return FileVisitResult.TERMINATE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+            return found.get();
+        } catch (IOException ignored) {
             return false;
         }
     }
@@ -79,6 +108,13 @@ public final class ProjectScanner {
         }
         if (stacks.contains(DetectedStack.MAVEN)) {
             return new BuildProfile(List.of("mvn", "verify"), List.of("mvn", "test"));
+        }
+        if (stacks.contains(DetectedStack.RUST)) {
+            return new BuildProfile(List.of("cargo", "check"), List.of("cargo", "test"));
+        }
+        if (stacks.contains(DetectedStack.TYPESCRIPT) || stacks.contains(DetectedStack.JAVASCRIPT)) {
+            String runner = Files.isRegularFile(root.resolve("package-lock.json")) ? "npm" : "npm";
+            return new BuildProfile(List.of(runner, "run", "build"), List.of(runner, "test"));
         }
         return new BuildProfile(List.of(), List.of());
     }

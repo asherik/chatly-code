@@ -27,7 +27,7 @@ public final class GraphQueryService {
         return graph.nodes().stream()
                 .filter(node -> node.name().toLowerCase(Locale.ROOT).contains(normalizedQuery)
                         || node.qualifiedName().toLowerCase(Locale.ROOT).contains(normalizedQuery))
-                .sorted(Comparator.comparing(CodeNode::qualifiedName))
+                .sorted(Comparator.comparingInt(this::searchRank).thenComparing(CodeNode::qualifiedName))
                 .toList();
     }
 
@@ -204,8 +204,18 @@ public final class GraphQueryService {
     private GraphAnswer genericSearchAnswer(CodeGraph graph, String question) {
         String token = extractToken(question == null ? "" : question.toLowerCase(Locale.ROOT));
         List<CodeNode> matches = findByName(graph, token);
-        List<String> evidence = matches.stream().map(CodeNode::qualifiedName).limit(15).toList();
-        List<String> files = matches.stream().map(node -> formatPath(node.filePath())).distinct().limit(15).toList();
+        List<String> evidence = matches.stream()
+                .map(this::displayNode)
+                .distinct()
+                .limit(15)
+                .toList();
+        List<String> files = matches.stream()
+                .filter(node -> isPrimarySearchResult(node.kind()))
+                .map(node -> formatPath(node.filePath()))
+                .filter(path -> !path.isBlank())
+                .distinct()
+                .limit(15)
+                .toList();
         return new GraphAnswer(
                 question,
                 matches.isEmpty() ? "No graph matches found." : "Matched " + matches.size() + " nodes",
@@ -236,9 +246,37 @@ public final class GraphQueryService {
     private boolean isStopWord(String token) {
         return switch (token) {
             case "what", "which", "where", "show", "flow", "from", "this", "that", "files", "file", "class",
-                 "depend", "depends", "dependency", "dependencies", "used", "uses", "using" -> true;
+                 "module", "modules", "service", "services",
+                 "depend", "depends", "dependency", "dependencies", "used", "uses", "using", "mention", "mentions" -> true;
             default -> false;
         };
+    }
+
+    private int searchRank(CodeNode node) {
+        return switch (node.kind()) {
+            case MODULE, PACKAGE, NAMESPACE -> 0;
+            case FILE -> 1;
+            case CLASS, INTERFACE, ENUM, RECORD, ANNOTATION, COMPONENT -> 2;
+            case FUNCTION, METHOD, CONSTRUCTOR, ROUTE -> 3;
+            case PROPERTY, FIELD, VARIABLE, CONSTANT -> 4;
+            case IMPORT, EXPORT -> 8;
+            default -> 6;
+        };
+    }
+
+    private boolean isPrimarySearchResult(NodeKind kind) {
+        return switch (kind) {
+            case MODULE, PACKAGE, NAMESPACE, FILE, CLASS, INTERFACE, ENUM, RECORD, COMPONENT, FUNCTION, METHOD, ROUTE -> true;
+            default -> false;
+        };
+    }
+
+    private String displayNode(CodeNode node) {
+        String path = formatPath(node.filePath());
+        if (path.isBlank()) {
+            return node.qualifiedName();
+        }
+        return node.qualifiedName() + " (" + path + ")";
     }
 
     private String formatPath(Path path) {

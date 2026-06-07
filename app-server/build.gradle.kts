@@ -8,6 +8,7 @@ dependencies {
     api(project(":code-graph"))
     api(project(":conversation-service"))
     api(project(":git-service"))
+    api(project(":language-generic"))
     api(project(":language-java"))
     api(project(":llm-gateway"))
     api(project(":problem-detector"))

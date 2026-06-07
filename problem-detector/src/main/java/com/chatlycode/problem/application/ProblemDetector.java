@@ -36,7 +36,7 @@ public final class ProblemDetector {
         problems.addAll(detectLayerViolations(graph, nodesByFile, edgesByFile));
         problems.addAll(detectEntityLeaks(nodesByFile, edgesByFile));
         problems.addAll(detectHugeClasses(nodesByFile));
-        problems.addAll(detectTooManyDependencies(graph, nodesByFile));
+        problems.addAll(detectTooManyDependencies(nodesByFile, edgesByFile));
         problems.addAll(detectGenericNames(graph.nodes()));
         problems.addAll(detectHighBlastRadius(graph));
         return List.copyOf(problems);
@@ -150,12 +150,14 @@ public final class ProblemDetector {
         return problems;
     }
 
-    private List<DetectedProblem> detectTooManyDependencies(CodeGraph graph, Map<Path, List<CodeNode>> nodesByFile) {
+    private List<DetectedProblem> detectTooManyDependencies(
+            Map<Path, List<CodeNode>> nodesByFile,
+            Map<Path, List<CodeEdge>> edgesByFile
+    ) {
         List<DetectedProblem> problems = new ArrayList<>();
         for (Map.Entry<Path, List<CodeNode>> entry : nodesByFile.entrySet()) {
-            long importCount = graph.edges().stream()
+            long importCount = edgesByFile.getOrDefault(entry.getKey(), List.of()).stream()
                     .filter(edge -> edge.kind() == EdgeKind.IMPORTS)
-                    .filter(edge -> findNodePath(graph, edge.sourceId()).equals(entry.getKey()))
                     .count();
             if (importCount < TOO_MANY_IMPORTS_THRESHOLD) {
                 continue;

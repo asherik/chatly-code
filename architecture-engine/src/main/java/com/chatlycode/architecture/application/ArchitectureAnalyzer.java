@@ -46,7 +46,7 @@ public final class ArchitectureAnalyzer {
         builder.append("    System_Boundary(project, \"Opened Project\") {\n");
         for (String packageName : packages) {
             String id = sanitize(packageName);
-            builder.append("        Container(").append(id).append(", \"").append(packageName).append("\", \"Java package\")\n");
+            builder.append("        Container(").append(id).append(", \"").append(packageName).append("\", \"Code module\")\n");
         }
         appendLayerContainer(builder, "controllers", graph.nodes().stream().filter(CodeNode::isController).count(), "Controllers");
         appendLayerContainer(builder, "services", graph.nodes().stream().filter(CodeNode::isService).count(), "Services");

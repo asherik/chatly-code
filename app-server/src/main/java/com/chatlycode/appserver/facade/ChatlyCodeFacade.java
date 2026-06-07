@@ -14,8 +14,10 @@ import com.chatlycode.git.cli.CliGitService;
 import com.chatlycode.git.domain.GitStatus;
 import com.chatlycode.graph.application.CodeGraphIndexer;
 import com.chatlycode.graph.domain.CodeGraph;
+import com.chatlycode.graph.domain.IndexProgress;
 import com.chatlycode.graph.query.GraphAnswer;
 import com.chatlycode.graph.query.GraphQueryService;
+import com.chatlycode.language.generic.GenericLanguagePlugin;
 import com.chatlycode.language.java.JavaLanguagePlugin;
 import com.chatlycode.llm.application.LlmGateway;
 import com.chatlycode.llm.application.LlmGatewayStatus;
@@ -38,6 +40,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public final class ChatlyCodeFacade {
 
@@ -93,7 +96,12 @@ public final class ChatlyCodeFacade {
         var llmGateway = LlmGatewayFactory.createFromEnvironment();
         return new ChatlyCodeFacade(
                 new ProjectScanner(projectRepository, clock),
-                new CodeGraphIndexer(List.of(new JavaLanguagePlugin()), clock),
+                new CodeGraphIndexer(List.of(
+                        new JavaLanguagePlugin(),
+                        GenericLanguagePlugin.rust(),
+                        GenericLanguagePlugin.typescript(),
+                        GenericLanguagePlugin.javascript()
+                ), clock),
                 new ArchitectureAnalyzer(),
                 new ProblemDetector(),
                 new TaskPlanner(clock),
@@ -115,8 +123,12 @@ public final class ChatlyCodeFacade {
     }
 
     public ProjectSession openAndScan(Path projectRoot) {
+        return openAndScan(projectRoot, ignored -> {});
+    }
+
+    public ProjectSession openAndScan(Path projectRoot, Consumer<IndexProgress> progressConsumer) {
         OpenedProject project = projectScanner.open(projectRoot);
-        CodeGraph graph = codeGraphIndexer.index(project);
+        CodeGraph graph = codeGraphIndexer.index(project, progressConsumer == null ? ignored -> {} : progressConsumer);
         var architecture = architectureAnalyzer.analyze(graph);
         var problems = problemDetector.detect(graph);
         var tasks = taskPlanner.fromProblems(problems).stream()

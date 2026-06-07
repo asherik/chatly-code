@@ -89,6 +89,10 @@ public final class FileInventoryService {
     }
 
     private boolean isSupportedSource(Path relativePath) {
+        String normalized = relativePath.toString().replace('\\', '/');
+        if (normalized.contains("/src/types/") || normalized.contains("/generated/") || normalized.contains("/__generated__/")) {
+            return false;
+        }
         String fileName = relativePath.getFileName().toString();
         return supportedExtensions.stream().anyMatch(fileName::endsWith);
     }

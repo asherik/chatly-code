@@ -3,6 +3,7 @@ package com.chatlycode.cli;
 import com.chatlycode.agent.domain.AgentRun;
 import com.chatlycode.appserver.facade.ChatlyCodeFacade;
 import com.chatlycode.appserver.facade.ProjectSession;
+import com.chatlycode.graph.domain.IndexProgress;
 import com.chatlycode.problem.domain.DetectedProblem;
 import com.chatlycode.task.domain.EngineeringTask;
 
@@ -127,7 +128,22 @@ public final class ChatlyCodeCli {
         if (!Files.isDirectory(project)) {
             throw new IllegalArgumentException("Project path is not a directory: " + project);
         }
-        return facade.openAndScan(project);
+        boolean quiet = command.booleanOption("quiet", false);
+        return facade.openAndScan(project, progress -> {
+            if (!quiet) {
+                printProgress(progress);
+            }
+        });
+    }
+
+    private void printProgress(IndexProgress progress) {
+        if (progress == null) {
+            return;
+        }
+        String file = progress.currentFile() == null || progress.currentFile().isBlank()
+                ? ""
+                : " " + progress.currentFile();
+        console.out("scan: " + progress.phase() + " " + progress.current() + "/" + progress.total() + file);
     }
 
     private EngineeringTask firstTask(ProjectSession session) {
@@ -296,6 +312,11 @@ public final class ChatlyCodeCli {
 
         Path pathOption(String name, Path defaultValue) {
             return Path.of(option(name, defaultValue.toString()));
+        }
+
+        boolean booleanOption(String name, boolean defaultValue) {
+            String value = option(name, Boolean.toString(defaultValue));
+            return Boolean.parseBoolean(value);
         }
     }
 }

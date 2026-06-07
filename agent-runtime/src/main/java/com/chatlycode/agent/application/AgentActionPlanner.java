@@ -12,6 +12,7 @@ import com.chatlycode.task.domain.EngineeringTask;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -67,13 +68,16 @@ public final class AgentActionPlanner {
         actions.add(action(AgentActionType.GRAPH_QUERY, "Query code graph", Map.of("question", directTask)));
         actions.add(action(AgentActionType.GLOB, "Find likely source files", Map.of("pattern", "**/*.java")));
 
+        LinkedHashSet<String> plannedPaths = new LinkedHashSet<>();
         graph.nodes().stream()
                 .filter(node -> node.qualifiedName().toLowerCase().contains(extractToken(directTask)))
+                .map(node -> node.filePath().toString().replace('\\', '/'))
+                .filter(plannedPaths::add)
                 .limit(3)
-                .forEach(node -> actions.add(action(
+                .forEach(path -> actions.add(action(
                         AgentActionType.READ_FILE,
-                        "Read " + node.filePath(),
-                        Map.of("path", node.filePath().toString().replace('\\', '/'))
+                        "Read " + path,
+                        Map.of("path", path)
                 )));
 
         if (!project.buildProfile().testCommand().isEmpty()) {
