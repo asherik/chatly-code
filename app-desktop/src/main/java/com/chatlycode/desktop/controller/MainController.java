@@ -26,6 +26,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.Locale;
 
 public final class MainController {
@@ -383,8 +384,16 @@ public final class MainController {
         if (selected == null) {
             return;
         }
+        openProject(selected.toPath());
+    }
+
+    public void openProject(Path projectRoot) {
         runBackground(text("action.scan"), () -> {
-            ProjectSession session = facade.openAndScan(selected.toPath());
+            ProjectSession session = facade.openAndScan(projectRoot, progress -> Platform.runLater(() ->
+                    status.setText(text("action.scan") + ": " + progress.phase()
+                            + " " + progress.current() + "/" + progress.total()
+                            + currentFileSuffix(progress.currentFile()))
+            ));
             var gitStatus = facade.gitStatus(session);
             var messages = facade.conversation(session);
             Platform.runLater(() -> {
@@ -394,6 +403,10 @@ public final class MainController {
                 status.setText(localization.message(locale, "status.projectOpened", session.project().displayName()));
             });
         });
+    }
+
+    private String currentFileSuffix(String currentFile) {
+        return currentFile == null || currentFile.isBlank() ? "" : " " + currentFile;
     }
 
     private ProjectSession requireSession() {

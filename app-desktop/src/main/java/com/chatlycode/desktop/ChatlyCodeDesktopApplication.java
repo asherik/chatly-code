@@ -7,6 +7,7 @@ import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
+import java.nio.file.Path;
 import java.util.Locale;
 
 public final class ChatlyCodeDesktopApplication extends Application {
@@ -20,9 +21,20 @@ public final class ChatlyCodeDesktopApplication extends Application {
         stage.setTitle(localization.message(Locale.getDefault(), "app.title"));
         stage.setScene(scene);
         stage.show();
+        openInitialProject(controller);
     }
 
     public static void main(String[] args) {
         launch(args);
+    }
+
+    private void openInitialProject(MainController controller) {
+        String project = getParameters().getNamed().get("project");
+        if (project == null || project.isBlank()) {
+            project = System.getProperty("chatly.project");
+        }
+        if (project != null && !project.isBlank()) {
+            controller.openProject(Path.of(project));
+        }
     }
 }
