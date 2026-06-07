@@ -35,7 +35,7 @@ public record CodeEdge(
         return targetId;
     }
 
-    public String kind() {
+    public String kindName() {
         return kind.name().toLowerCase();
     }
 }

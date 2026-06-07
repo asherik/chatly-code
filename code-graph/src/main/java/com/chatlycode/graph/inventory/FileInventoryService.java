@@ -30,7 +30,8 @@ public final class FileInventoryService {
             ".build", "Pods", "Carthage", "DerivedData", ".swiftpm",
             ".dart_tool", ".pub-cache", ".cxx", ".externalNativeBuild", "vcpkg_installed",
             ".bloop", ".metals", "lua_modules", ".luarocks",
-            "__history", "__recovery", ".cache"
+            "__history", "__recovery", ".cache",
+            "examples", ".idea", ".vscode"
     );
 
     private final List<String> supportedExtensions;

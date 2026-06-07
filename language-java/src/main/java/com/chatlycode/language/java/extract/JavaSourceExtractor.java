@@ -45,6 +45,7 @@ public final class JavaSourceExtractor implements LanguageExtractor {
         List<UnresolvedReference> unresolved = new ArrayList<>();
         String[] lines = sourceFile.content().split("\\R", -1);
         List<String> pendingAnnotations = new ArrayList<>();
+        List<PendingImport> pendingImports = new ArrayList<>();
         String currentTypeId = null;
 
         if (!packageName.isBlank()) {
@@ -82,10 +83,7 @@ public final class JavaSourceExtractor implements LanguageExtractor {
                         "",
                         List.of()
                 ));
-                if (currentTypeId != null) {
-                    edges.add(edge(currentTypeId, importName, "imports", "tree_sitter", 0.7, lineNumber));
-                    edges.add(edge(currentTypeId, importId, "contains", "tree_sitter", 1.0, lineNumber));
-                }
+                pendingImports.add(new PendingImport(importId, importName, lineNumber));
                 continue;
             }
 
@@ -110,6 +108,10 @@ public final class JavaSourceExtractor implements LanguageExtractor {
                 if (!packageName.isBlank()) {
                     String packageId = stableId(sourceFile, "package", packageName, 1);
                     edges.add(edge(packageId, currentTypeId, "contains", "tree_sitter", 1.0, lineNumber));
+                }
+                for (PendingImport pendingImport : pendingImports) {
+                    edges.add(edge(currentTypeId, pendingImport.name(), "imports", "tree_sitter", 0.7, pendingImport.line()));
+                    edges.add(edge(currentTypeId, pendingImport.id(), "contains", "tree_sitter", 1.0, pendingImport.line()));
                 }
                 for (String decorator : decorators) {
                     edges.add(edge(currentTypeId, decorator, "decorates", "framework_resolver", 0.95, lineNumber));
@@ -236,5 +238,8 @@ public final class JavaSourceExtractor implements LanguageExtractor {
             }
         }
         return Optional.empty();
+    }
+
+    private record PendingImport(String id, String name, int line) {
     }
 }

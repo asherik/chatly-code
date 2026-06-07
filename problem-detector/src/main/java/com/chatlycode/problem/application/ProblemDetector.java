@@ -24,6 +24,7 @@ public final class ProblemDetector {
     private static final int HUGE_METHOD_COUNT_THRESHOLD = 30;
     private static final int TOO_MANY_IMPORTS_THRESHOLD = 25;
     private static final int HIGH_BLAST_RADIUS_THRESHOLD = 12;
+    private static final Path UNKNOWN_PATH = Path.of("");
 
     public List<DetectedProblem> detect(CodeGraph graph) {
         Map<Path, List<CodeNode>> nodesByFile = graph.nodes().stream()
@@ -239,6 +240,6 @@ public final class ProblemDetector {
                 .filter(node -> node.id().equals(nodeId))
                 .map(CodeNode::filePath)
                 .findFirst()
-                .orElse(Path.of(nodeId));
+                .orElse(UNKNOWN_PATH);
     }
 }

@@ -61,7 +61,7 @@ public final class GraphQueryService {
                 continue;
             }
             if (edge.kind() == EdgeKind.IMPORTS || edge.kind() == EdgeKind.REFERENCES || edge.kind() == EdgeKind.TYPE_OF) {
-                dependencies.add(edge.targetId());
+                dependencies.add(displayTarget(graph, edge.targetId()));
             }
         }
         return List.copyOf(dependencies);
@@ -74,7 +74,7 @@ public final class GraphQueryService {
                 continue;
             }
             if (edge.kind() == EdgeKind.IMPORTS || edge.kind() == EdgeKind.REFERENCES || edge.kind() == EdgeKind.CALLS) {
-                incoming.add(edge.sourceId());
+                incoming.add(displayTarget(graph, edge.sourceId()));
             }
         }
         return List.copyOf(incoming);
@@ -129,7 +129,7 @@ public final class GraphQueryService {
             boolean touchesRepository = deps.stream().anyMatch(dep -> dep.contains("Repository") || dep.contains("repository"));
             if (touchesRepository) {
                 evidence.add(controller.qualifiedName() + " -> " + deps);
-                files.add(controller.filePath().toString());
+                files.add(formatPath(controller.filePath()));
             }
         }
         String summary = evidence.isEmpty()
@@ -139,16 +139,41 @@ public final class GraphQueryService {
     }
 
     private GraphAnswer dependencyAnswer(CodeGraph graph, String question, String normalized) {
-        String token = extractToken(normalized);
-        List<CodeNode> matches = findByName(graph, token);
-        if (matches.isEmpty()) {
+        CodeNode node = findMentionedNode(graph, normalized);
+        if (node == null) {
             return new GraphAnswer(question, "No graph node matched the question.", List.of(), List.of(), true);
         }
-        CodeNode node = matches.getFirst();
         List<String> evidence = new ArrayList<>();
         evidence.addAll(incomingDependencies(graph, node).stream().map(dep -> "Incoming: " + dep).toList());
         evidence.addAll(outgoingDependencies(graph, node).stream().map(dep -> "Outgoing: " + dep).toList());
-        return new GraphAnswer(question, "Dependencies for " + node.qualifiedName(), evidence, List.of(node.filePath().toString()), false);
+        return new GraphAnswer(question, "Dependencies for " + node.qualifiedName(), evidence, List.of(formatPath(node.filePath())), false);
+    }
+
+    private CodeNode findMentionedNode(CodeGraph graph, String normalizedQuestion) {
+        Set<String> tokens = Set.copyOf(significantTokens(normalizedQuestion));
+        CodeNode exact = graph.nodes().stream()
+                .filter(node -> tokens.contains(node.name().toLowerCase(Locale.ROOT))
+                        || tokens.contains(node.qualifiedName().toLowerCase(Locale.ROOT)))
+                .max(Comparator.comparingInt(node -> node.qualifiedName().length()))
+                .orElse(null);
+        if (exact != null) {
+            return exact;
+        }
+        CodeNode direct = graph.nodes().stream()
+                .filter(node -> normalizedQuestion.contains(node.name().toLowerCase(Locale.ROOT))
+                        || normalizedQuestion.contains(node.qualifiedName().toLowerCase(Locale.ROOT)))
+                .max(Comparator.comparingInt(node -> node.qualifiedName().length()))
+                .orElse(null);
+        if (direct != null) {
+            return direct;
+        }
+        for (String token : significantTokens(normalizedQuestion)) {
+            List<CodeNode> matches = findByName(graph, token);
+            if (!matches.isEmpty()) {
+                return matches.getFirst();
+            }
+        }
+        return null;
     }
 
     private GraphAnswer riskyFilesAnswer(CodeGraph graph, String question) {
@@ -158,7 +183,7 @@ public final class GraphQueryService {
             int inbound = incomingDependencies(graph, node).size();
             if (inbound >= 8) {
                 evidence.add(node.qualifiedName() + " inbound=" + inbound);
-                files.add(node.filePath().toString());
+                files.add(formatPath(node.filePath()));
             }
         }
         return new GraphAnswer(
@@ -172,7 +197,7 @@ public final class GraphQueryService {
 
     private GraphAnswer roleAnswer(CodeGraph graph, String question, List<CodeNode> nodes) {
         List<String> evidence = nodes.stream().map(CodeNode::qualifiedName).limit(20).toList();
-        List<String> files = nodes.stream().map(node -> node.filePath().toString()).distinct().limit(20).toList();
+        List<String> files = nodes.stream().map(node -> formatPath(node.filePath())).distinct().limit(20).toList();
         return new GraphAnswer(question, "Found " + nodes.size() + " matching nodes", evidence, files, false);
     }
 
@@ -180,7 +205,7 @@ public final class GraphQueryService {
         String token = extractToken(question == null ? "" : question.toLowerCase(Locale.ROOT));
         List<CodeNode> matches = findByName(graph, token);
         List<String> evidence = matches.stream().map(CodeNode::qualifiedName).limit(15).toList();
-        List<String> files = matches.stream().map(node -> node.filePath().toString()).distinct().limit(15).toList();
+        List<String> files = matches.stream().map(node -> formatPath(node.filePath())).distinct().limit(15).toList();
         return new GraphAnswer(
                 question,
                 matches.isEmpty() ? "No graph matches found." : "Matched " + matches.size() + " nodes",
@@ -191,19 +216,48 @@ public final class GraphQueryService {
     }
 
     private String extractToken(String normalizedQuestion) {
-        String[] tokens = normalizedQuestion.replaceAll("[^a-z0-9\\s]", " ").split("\\s+");
-        for (String token : tokens) {
-            if (token.length() >= 3 && !isStopWord(token)) {
-                return token;
-            }
+        for (String token : significantTokens(normalizedQuestion)) {
+            return token;
         }
         return normalizedQuestion;
     }
 
+    private List<String> significantTokens(String normalizedQuestion) {
+        String[] tokens = normalizedQuestion.replaceAll("[^a-z0-9\\s]", " ").split("\\s+");
+        List<String> result = new ArrayList<>();
+        for (String token : tokens) {
+            if (token.length() >= 3 && !isStopWord(token)) {
+                result.add(token);
+            }
+        }
+        return result;
+    }
+
     private boolean isStopWord(String token) {
         return switch (token) {
-            case "what", "which", "where", "show", "flow", "from", "this", "that", "files", "file", "class" -> true;
+            case "what", "which", "where", "show", "flow", "from", "this", "that", "files", "file", "class",
+                 "depend", "depends", "dependency", "dependencies", "used", "uses", "using" -> true;
             default -> false;
         };
+    }
+
+    private String formatPath(Path path) {
+        return path == null ? "" : path.toString().replace('\\', '/');
+    }
+
+    private String displayTarget(CodeGraph graph, String nodeIdOrName) {
+        return graph.nodes().stream()
+                .filter(node -> node.id().equals(nodeIdOrName))
+                .findFirst()
+                .map(node -> {
+                    if (node.qualifiedName() != null && !node.qualifiedName().isBlank()) {
+                        return node.qualifiedName();
+                    }
+                    if (node.filePath() != null) {
+                        return formatPath(node.filePath());
+                    }
+                    return node.name();
+                })
+                .orElse(nodeIdOrName);
     }
 }

@@ -29,6 +29,7 @@ public final class MainViewModel {
     private final StringProperty diffText = new SimpleStringProperty("");
     private final StringProperty terminalOutput = new SimpleStringProperty("");
     private final StringProperty gitBranch = new SimpleStringProperty("");
+    private final StringProperty llmStatus = new SimpleStringProperty("");
     private final StringProperty lastGraphAnswer = new SimpleStringProperty("");
     private final StringProperty runtimeStatus = new SimpleStringProperty("");
 
@@ -73,6 +74,11 @@ public final class MainViewModel {
 
     public void applyGitBranch(String branch) {
         gitBranch.set(branch == null ? "" : branch);
+    }
+
+    public void applyLlmStatus(boolean configured, String provider, String model) {
+        String prefix = configured ? "LLM" : "LLM offline";
+        llmStatus.set(prefix + ": " + provider + "/" + model);
     }
 
     public void applyAgentRun(AgentRun run) {
@@ -153,6 +159,10 @@ public final class MainViewModel {
 
     public StringProperty gitBranchProperty() {
         return gitBranch;
+    }
+
+    public StringProperty llmStatusProperty() {
+        return llmStatus;
     }
 
     public StringProperty lastGraphAnswerProperty() {

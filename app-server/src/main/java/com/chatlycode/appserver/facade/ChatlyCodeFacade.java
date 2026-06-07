@@ -18,7 +18,8 @@ import com.chatlycode.graph.query.GraphAnswer;
 import com.chatlycode.graph.query.GraphQueryService;
 import com.chatlycode.language.java.JavaLanguagePlugin;
 import com.chatlycode.llm.application.LlmGateway;
-import com.chatlycode.llm.provider.NoopLlmGateway;
+import com.chatlycode.llm.application.LlmGatewayStatus;
+import com.chatlycode.llm.provider.LlmGatewayFactory;
 import com.chatlycode.problem.application.ProblemDetector;
 import com.chatlycode.project.application.InMemoryProjectRepository;
 import com.chatlycode.project.application.ProjectScanner;
@@ -89,7 +90,7 @@ public final class ChatlyCodeFacade {
         var conversationService = new ConversationService(clock);
         var workspaceSafetyService = new WorkspaceSafetyService();
         var gitService = new CliGitService(runtimeService);
-        var llmGateway = new NoopLlmGateway();
+        var llmGateway = LlmGatewayFactory.createFromEnvironment();
         return new ChatlyCodeFacade(
                 new ProjectScanner(projectRepository, clock),
                 new CodeGraphIndexer(List.of(new JavaLanguagePlugin()), clock),
@@ -166,6 +167,10 @@ public final class ChatlyCodeFacade {
         return conversationService.history(session.conversationId());
     }
 
+    public LlmGatewayStatus llmStatus() {
+        return llmGateway.status();
+    }
+
     public AgentRun startAgentRun(ProjectSession session, EngineeringTask task) {
         return agentOrchestrator.startRun(
                 session.conversationId(),
@@ -217,7 +222,7 @@ public final class ChatlyCodeFacade {
 
     public String explainWithLlm(ProjectSession session, String userPrompt) {
         String context = new AgentContextBuilder().build(session.graph(), session.problems(), "");
-        String response = llmGateway.complete(
+        String response = safeLlmComplete(
                 "Answer using graph evidence only. Mark uncertainty when evidence is incomplete.",
                 context + "\n\nQuestion:\n" + userPrompt
         );
@@ -235,6 +240,14 @@ public final class ChatlyCodeFacade {
             return gitService.checkpointRef(workspace);
         } catch (RuntimeException exception) {
             return "";
+        }
+    }
+
+    private String safeLlmComplete(String systemPrompt, String userPrompt) {
+        try {
+            return llmGateway.complete(systemPrompt, userPrompt);
+        } catch (RuntimeException exception) {
+            return "LLM request failed: " + exception.getMessage();
         }
     }
 }

@@ -41,6 +41,7 @@ public final class MainController {
         this.facade = facade;
         this.localization = localization;
         this.locale = locale == null ? Locale.ENGLISH : locale;
+        applyLlmStatus();
         buildView();
     }
 
@@ -59,7 +60,11 @@ public final class MainController {
         branch.textProperty().bind(viewModel.gitBranchProperty());
         branch.getStyleClass().add("git-branch");
 
-        HBox toolbar = new HBox(12, title, openProject, branch);
+        Label llm = new Label();
+        llm.textProperty().bind(viewModel.llmStatusProperty());
+        llm.getStyleClass().add("llm-status");
+
+        HBox toolbar = new HBox(12, title, openProject, branch, llm);
         toolbar.getStyleClass().add("toolbar");
         toolbar.setPadding(new Insets(12));
 
@@ -154,7 +159,14 @@ public final class MainController {
                 setText(empty || item == null ? null : "[" + item.risk() + "] " + item.title());
             }
         });
-        list.getSelectionModel().selectedItemProperty().bindBidirectional(viewModel.selectedTaskProperty());
+        list.getSelectionModel().selectedItemProperty().addListener((obs, old, selected) ->
+                viewModel.selectedTaskProperty().set(selected)
+        );
+        viewModel.selectedTaskProperty().addListener((obs, old, selected) -> {
+            if (selected != list.getSelectionModel().getSelectedItem()) {
+                list.getSelectionModel().select(selected);
+            }
+        });
 
         TextArea details = new TextArea();
         details.setEditable(false);
@@ -410,5 +422,10 @@ public final class MainController {
 
     private String text(String key) {
         return localization.message(locale, key);
+    }
+
+    private void applyLlmStatus() {
+        var status = facade.llmStatus();
+        viewModel.applyLlmStatus(status.configured(), status.profile().provider(), status.profile().model());
     }
 }

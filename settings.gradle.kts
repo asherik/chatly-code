@@ -15,6 +15,7 @@ dependencyResolutionManagement {
 rootProject.name = "chatly-code"
 
 include(
+    "app-cli",
     "app-desktop",
     "app-server",
     "shared-kernel",

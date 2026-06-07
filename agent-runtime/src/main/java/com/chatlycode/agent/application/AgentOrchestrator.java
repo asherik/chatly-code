@@ -124,10 +124,13 @@ public final class AgentOrchestrator {
 
         conversationService.append(conversationId, MessageAuthor.SYSTEM, "Agent run started");
         conversationService.append(conversationId, MessageAuthor.AGENT, String.join("\n", plan.steps()));
-        llmGateway.complete(
+        String llmAdvice = safeLlmComplete(
                 "You are a coding agent. Use graph evidence and approved workspace tools only.",
                 context + "\n\nTask:\n" + (directTask.isBlank() ? task.goal() : directTask)
         );
+        if (!llmAdvice.isBlank()) {
+            conversationService.append(conversationId, MessageAuthor.AGENT, llmAdvice);
+        }
 
         WorkspaceRoot workspace = new WorkspaceRoot(project.root());
         String checkpoint = safeCheckpoint(workspace);
@@ -277,6 +280,14 @@ public final class AgentOrchestrator {
             return gitService.checkpointRef(workspace);
         } catch (RuntimeException exception) {
             return "";
+        }
+    }
+
+    private String safeLlmComplete(String systemPrompt, String userPrompt) {
+        try {
+            return llmGateway.complete(systemPrompt, userPrompt);
+        } catch (RuntimeException exception) {
+            return "LLM advisory unavailable: " + exception.getMessage();
         }
     }
 }

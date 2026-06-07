@@ -20,7 +20,7 @@ This repository is structured as a conservative MVP vertical slice. Module bound
 - CLI git status, diff, checkpoint and rollback.
 - Runtime command execution for project verification.
 - Conversation history for user, agent and system messages.
-- LLM gateway abstraction with a no-op local implementation.
+- LLM gateway abstraction with Z.AI support and a safe local no-op fallback.
 - English and Russian UI localization.
 
 ## Modules
@@ -43,6 +43,28 @@ conversation-service durable in-memory conversation history
 llm-gateway          provider abstraction
 localization         i18n resource bundles
 shared-kernel        ids, time, results, events
+```
+
+## LLM Provider
+
+Z.AI is selected by default when an API key is present. Without a key, Chatly Code stays usable through deterministic local analysis and reports `LLM offline` in the toolbar.
+
+Environment variables:
+
+```bash
+CHATLY_LLM_PROVIDER=zai
+ZAI_API_KEY=...
+ZAI_MODEL=glm-4.5
+ZAI_BASE_URL=https://api.z.ai/api/paas/v4
+```
+
+Equivalent JVM system properties are also supported:
+
+```bash
+-Dchatly.llm.provider=zai
+-Dchatly.llm.zai.apiKey=...
+-Dchatly.llm.zai.model=glm-4.5
+-Dchatly.llm.zai.baseUrl=https://api.z.ai/api/paas/v4
 ```
 
 ## Build
