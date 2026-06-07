@@ -1,6 +1,7 @@
 package com.chatlycode.language.spi;
 
 import java.nio.file.Path;
+import java.util.List;
 
 public record ExtractedNode(
         String stableId,
@@ -8,7 +9,10 @@ public record ExtractedNode(
         String name,
         String qualifiedName,
         Path relativePath,
-        int line
+        int startLine,
+        int endLine,
+        String signature,
+        List<String> decorators
 ) {
 
     public ExtractedNode {
@@ -27,8 +31,17 @@ public record ExtractedNode(
         if (relativePath == null) {
             throw new IllegalArgumentException("Node path is required");
         }
-        if (line < 1) {
-            line = 1;
+        if (startLine < 1) {
+            startLine = 1;
         }
+        if (endLine < startLine) {
+            endLine = startLine;
+        }
+        signature = signature == null ? "" : signature;
+        decorators = List.copyOf(decorators == null ? List.of() : decorators);
+    }
+
+    public int line() {
+        return startLine;
     }
 }

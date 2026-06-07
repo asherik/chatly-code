@@ -8,4 +8,8 @@ public interface GitService {
     GitStatus status(WorkspaceRoot root);
 
     String diff(WorkspaceRoot root);
+
+    String checkpointRef(WorkspaceRoot root);
+
+    void rollback(WorkspaceRoot root, String checkpointRef);
 }

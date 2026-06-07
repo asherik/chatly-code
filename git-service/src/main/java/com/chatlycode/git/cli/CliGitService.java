@@ -29,6 +29,20 @@ public final class CliGitService implements GitService {
         return run(root, List.of("git", "diff", "--"));
     }
 
+    @Override
+    public String checkpointRef(WorkspaceRoot root) {
+        return run(root, List.of("git", "rev-parse", "HEAD")).trim();
+    }
+
+    @Override
+    public void rollback(WorkspaceRoot root, String checkpointRef) {
+        if (checkpointRef == null || checkpointRef.isBlank()) {
+            throw new IllegalArgumentException("Checkpoint ref must not be blank");
+        }
+        run(root, List.of("git", "reset", "--hard", checkpointRef));
+        run(root, List.of("git", "clean", "-fd"));
+    }
+
     private String run(WorkspaceRoot root, List<String> command) {
         var result = runtimeService.run(new CommandRequest(root, command, Duration.ofMinutes(2)));
         if (result.exitCode() != 0) {

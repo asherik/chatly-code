@@ -4,5 +4,6 @@ plugins {
 
 dependencies {
     api(project(":problem-detector"))
+    api(project(":project-domain"))
     api(project(":shared-kernel"))
 }

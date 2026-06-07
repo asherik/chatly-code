@@ -9,6 +9,7 @@ dependencies {
     api(project(":conversation-service"))
     api(project(":git-service"))
     api(project(":language-java"))
+    api(project(":llm-gateway"))
     api(project(":problem-detector"))
     api(project(":project-domain"))
     api(project(":runtime-service"))

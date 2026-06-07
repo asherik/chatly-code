@@ -13,7 +13,7 @@ class JavaSourceExtractorTest {
     private final JavaSourceExtractor extractor = new JavaSourceExtractor();
 
     @Test
-    void extractsJavaTypeAndImports() {
+    void extractsJavaTypeImportsAndDecorators() {
         Path root = Path.of("C:/workspace/sample").toAbsolutePath().normalize();
         SourceFile sourceFile = new SourceFile(
                 root,
@@ -31,9 +31,11 @@ class JavaSourceExtractorTest {
 
         var result = extractor.extract(sourceFile);
 
-        assertEquals(1, result.nodes().size());
-        assertEquals("DemoService", result.nodes().getFirst().name());
-        assertTrue(result.edges().stream().anyMatch(edge -> edge.toName().equals("java.util.List")));
-        assertTrue(result.edges().stream().anyMatch(edge -> edge.toName().equals("spring.stereotype")));
+        assertTrue(result.nodes().stream().anyMatch(node -> node.kind().equals("class") && node.name().equals("DemoService")));
+        assertTrue(result.nodes().stream().anyMatch(node -> node.kind().equals("import") && node.name().equals("java.util.List")));
+        assertTrue(result.nodes().stream()
+                .filter(node -> node.name().equals("DemoService"))
+                .anyMatch(node -> node.decorators().contains("Service")));
+        assertTrue(result.edges().stream().anyMatch(edge -> edge.kind().equals("imports") && edge.targetId().equals("java.util.List")));
     }
 }
