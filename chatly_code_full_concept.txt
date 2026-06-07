@@ -1,0 +1,7768 @@
+================================================================================
+FILE: rules\project_rules.md
+PATH: C:\projects\chatly-code\rules\project_rules.md
+================================================================================
+
+# Project Rules: Java/JavaFX Best Practices
+
+Эти правила обязательны для любого кода в проекте. Цель: код должен быть простым, понятным, тестируемым, расширяемым и не превращаться в кашу после генерации ИИ.
+
+## 1. Главные принципы
+
+- Пиши простой код. Сначала читаемость, потом "умность".
+- Соблюдай KISS: не усложняй архитектуру без реальной причины.
+- Соблюдай DRY: не копируй одинаковую логику, выноси повторения в методы, классы, компоненты или утилиты.
+- Но не доводи DRY до абсурда: если два похожих участка кода развиваются по-разному, не надо насильно склеивать их в одну абстракцию.
+- Следуй SOLID, но без фанатизма. Принципы нужны для понятного кода, а не для лишних интерфейсов.
+- Делай высокую связность внутри класса или модуля: класс должен заниматься одной понятной задачей.
+- Делай слабую сопряженность между классами и слоями: меньше прямых зависимостей, больше явных контрактов.
+- Делай разбиение по доменам и субдоменам: Project, Code Graph, Architecture, Problem Detection, Task, Agent, Workspace Safety, Runtime, LLM Gateway, UI.
+- Не сваливай unrelated responsibilities в один service/manager/helper. Если модуль трудно назвать одним понятным словом, он скорее всего делает слишком много.
+- Языково-специфичную логику Java/Spring/Rust/TypeScript держи в language plugins/adapters за stable SPI, а не в generic core.
+- Language plugins должны быть выносимы в отдельные библиотеки без переписывания core.
+- Generic core не должен импортировать Java/Spring/Rust/TypeScript plugin implementation classes.
+- Код должен быть легко удалить, заменить и протестировать.
+- Не пиши "магический" код, который работает только потому, что автор помнит контекст.
+- Любое нетривиальное решение должно быть очевидно из названий, структуры или короткого комментария.
+
+## 2. Языки и стек
+
+- В проекте используется Java и JavaFX.
+- Java-код должен быть современным, простым, типобезопасным и понятным.
+- JavaFX используется только для UI-слоя: окна, контроллеры представлений, биндинги, события, отображение состояния.
+- Для сборки исходников Chatly Code обязательно используй Gradle. Не добавляй Maven и не смешивай build tools в самом Chatly Code.
+- Для coding-agent инструментов используй Spring AI Agent Utils из `C:\projects\chatly-code\examples\spring-ai-agent-utils-main` как базу. Не пиши с нуля file/shell/grep/glob/todo/skills/subagent инструменты, если библиотека уже закрывает задачу.
+- Бизнес-логика не должна жить в JavaFX-контроллерах.
+- Для Java-кода используй Lombok, если он уменьшает шаблонный код и не ухудшает читаемость.
+- Предпочитай меньше кода там, где это не прячет важную логику.
+
+## 3. Архитектура и слои
+
+Слои должны быть разделены явно:
+
+- UI/View: JavaFX FXML, views, UI-компоненты.
+- Controller/ViewController: обработка UI-событий, преобразование пользовательского ввода, вызов сервисов.
+- Service/Application: бизнес-сценарии, транзакции, правила приложения.
+- Domain: доменные модели, бизнес-правила, value objects.
+- Repository/Data Access: работа с БД, файлами, сетью или внешними источниками данных.
+- DTO/ViewModel: объекты для передачи данных между слоями или отображения в UI.
+- Mapper/Converter: преобразование Entity <-> DTO/ViewModel/Domain.
+
+Правила:
+
+- Контроллеры не должны напрямую работать с репозиториями.
+- Контроллеры не должны создавать SQL-запросы, читать файлы, ходить в сеть или управлять транзакциями.
+- Контроллеры не должны отдавать наружу JPA Entity или внутренние persistence-модели.
+- UI-слой не должен зависеть от деталей хранения данных.
+- Репозитории не должны содержать бизнес-логику.
+- Entity не должны использоваться как DTO для UI или API.
+- Сервисы должны работать через интерфейсы или явные зависимости, если это снижает связанность и упрощает тесты.
+- Не создавай лишние слои "на всякий случай". Слой нужен, если у него есть реальная ответственность.
+- Зависимости должны идти сверху вниз: UI -> Service -> Repository. Нижние слои не должны знать про верхние.
+
+## 4. JavaFX правила
+
+- JavaFX-контроллер должен быть тонким.
+- UI должен поддерживать мультиязычность: английский по умолчанию и русский как обязательная встроенная локаль.
+- Не хардкодь пользовательские строки в JavaFX-контроллерах и view.
+- Все labels, buttons, tooltips, dialogs, menus и empty states должны идти через i18n/resource bundle.
+- В контроллере допустимы:
+  - инициализация UI;
+  - биндинги;
+  - обработчики кнопок, меню, таблиц и форм;
+  - вызов сервисов;
+  - отображение результата или ошибки.
+- В контроллере запрещены:
+  - бизнес-правила;
+  - прямой доступ к базе данных;
+  - работа с репозиториями;
+  - сложные вычисления;
+  - парсинг больших структур;
+  - сетевые вызовы без сервиса;
+  - хранение глобального состояния приложения.
+- Долгие операции выполняй не в UI-thread. Используй `Task`, `Service`, virtual threads, executor или другой безопасный механизм.
+- UI должен обновляться только из JavaFX Application Thread.
+- Для таблиц и форм используй ViewModel/DTO, а не Entity.
+- Валидацию пользовательского ввода выноси в отдельные валидаторы или сервисы, если она сложнее пары простых проверок.
+- Не смешивай FXML-разметку, стили, бизнес-логику и доступ к данным в одном месте.
+
+## 5. Modern Java правила
+
+- Используй современные возможности Java там, где они делают код проще: records, sealed classes, pattern matching, switch expressions, text blocks.
+- Используй virtual threads для большого количества блокирующих IO-задач, если это подходит сценарию.
+- Используй structured concurrency для связанных фоновых операций, когда нужно управлять жизненным циклом группы задач.
+- Предпочитай immutable-модели: records, final-поля, неизменяемые коллекции.
+- Используй `Optional` аккуратно: для возвращаемого отсутствующего значения, но не как поле Entity/DTO без причины.
+- Для ограниченных наборов состояний используй enum или sealed hierarchy.
+- Для ошибок и результатов используй явные доменные типы, если простого исключения недостаточно.
+- Соблюдай null-safety через JSpecify-аннотации и статический анализ, если они подключены в проекте.
+
+## 6. Lombok правила
+
+- Используй Lombok для уменьшения шаблонного Java-кода:
+  - `@Getter`;
+  - `@Setter`, только где изменяемость действительно нужна;
+  - `@RequiredArgsConstructor`;
+  - `@Builder`;
+  - `@Value` для immutable-моделей;
+  - `@Data` только для простых DTO, где безопасны equals/hashCode/toString/setters.
+- Не используй `@Data` на JPA Entity без понимания последствий.
+- Не включай в `toString`, `equals` и `hashCode` тяжелые связи, ленивые коллекции и циклические зависимости.
+- Предпочитай constructor injection через `@RequiredArgsConstructor`.
+- Не используй Lombok, если аннотация делает поведение класса менее очевидным.
+
+## 7. Модели, Entity, DTO и Mapper
+
+- Entity представляет структуру хранения данных, а не UI-контракт.
+- DTO представляет данные для передачи между слоями или наружу.
+- ViewModel представляет данные и состояние для UI.
+- Domain model представляет бизнес-сущность и правила предметной области.
+- Не передавай Entity в UI.
+- Не возвращай Entity из сервисов, если UI или внешний код могут начать менять внутреннее состояние.
+- Для преобразования используй отдельные mapper-классы или функции.
+- Для повторяемого и нетривиального маппинга используй MapStruct.
+- Не пиши маппинг прямо в контроллере, если он не тривиальный.
+- Не добавляй в Entity методы, которые зависят от UI, репозиториев, сетевых клиентов или JavaFX.
+
+## 8. Сервисы
+
+- Сервис реализует пользовательский сценарий или бизнес-операцию.
+- Метод сервиса должен иметь понятное имя, отражающее действие: `createUser`, `loadChatHistory`, `sendMessage`.
+- Сервис не должен знать про кнопки, поля ввода, таблицы и FXML.
+- Сервис должен валидировать бизнес-правила.
+- Сервис должен координировать репозитории, мапперы, доменные объекты и транзакции.
+- Сервис не должен быть "god object". Если сервис разросся, раздели его по сценариям или ответственности.
+
+## 9. Репозитории и доступ к данным
+
+- Репозиторий отвечает только за сохранение, получение, поиск и удаление данных.
+- Репозиторий не должен содержать бизнес-решения.
+- Названия методов должны быть точными: `findById`, `findActiveByUserId`, `save`, `deleteById`.
+- Не возвращай `null`, если можно вернуть `Optional`, явный result-тип или пустую коллекцию.
+- Не делай N+1 запросы. Загружай связанные данные осознанно.
+- Не прячь дорогие операции за невинными названиями методов.
+- Все внешние ресурсы закрывай корректно.
+- Ошибки доступа к данным обрабатывай на уровне сервиса или выше, не размазывай обработку по UI-слою.
+
+## 10. Зависимости и DI
+
+- Используй dependency injection вместо `new` внутри бизнес-классов, если зависимость внешняя или сложная.
+- Constructor injection предпочтительнее field injection.
+- Класс должен явно показывать свои зависимости через конструктор.
+- Не пиши самописный DI, event bus, config registry, i18n registry, ORM, migration runner, mapper framework, logging facade или metrics framework, если это уже нормально закрывается Spring/JVM-экосистемой.
+- Сначала используй стандартные средства Spring Boot и Spring Framework, потом кастомный код.
+- Для настроек используй typed configuration через `@ConfigurationProperties`.
+- Для обычной доменной persistence используй Spring Data JPA/Hibernate.
+- Для high-volume graph indexing таблиц допустим Spring JDBC/JdbcClient с prepared statements и batch transactions.
+- Для миграций используй Liquibase XML. Не используй Flyway и не смешивай два подхода к миграциям в одном проекте.
+- Для метрик используй Micrometer.
+- Для логирования используй SLF4J/Logback, а не `System.out.println`.
+- Не используй глобальное состояние без крайней необходимости.
+- Singleton допустим только для stateless-сервисов или инфраструктуры, где это оправдано.
+- Не создавай циклические зависимости между сервисами.
+
+## 11. Ошибки и исключения
+
+- Не глуши исключения пустым `catch`.
+- Не возвращай `null` вместо ошибки, если ошибка важна для сценария.
+- Исключения должны быть информативными, но не должны раскрывать секреты.
+- Для ожидаемых бизнес-ошибок используй явные типы ошибок или checked/unchecked exceptions по стилю проекта.
+- На UI показывай понятное сообщение, а не stack trace.
+- Логируй технические детали там, где это помогает диагностике.
+
+## 12. Имена и читаемость
+
+- Имя класса должно ясно говорить, за что класс отвечает.
+- Имя метода должно начинаться с действия.
+- Не используй сокращения, если они не общеприняты.
+- Избегай названий `Manager`, `Helper`, `Utils`, если можно назвать точнее.
+- Метод должен быть коротким и делать одну вещь.
+- Если метод трудно назвать, скорее всего он делает слишком много.
+- Не используй "магические числа" и строки. Выноси их в константы, enum или конфигурацию.
+- Условия должны читаться как бизнес-правила. Сложные условия выноси в методы с хорошими именами.
+
+## 13. Размер классов и методов
+
+- Класс должен иметь одну главную ответственность.
+- Метод должен быть достаточно коротким, чтобы его можно было понять без прокрутки.
+- Если класс знает слишком много о разных частях системы, раздели его.
+- Если метод имеет много параметров, используй parameter object, DTO, builder или command object.
+- Не создавай огромные util-классы.
+- Не создавай абстракции ради абстракций.
+
+## 14. Коллекции и данные
+
+- Возвращай пустые коллекции вместо `null`.
+- Предпочитай immutable collections, если данные не должны меняться.
+- Не отдавай наружу изменяемые внутренние коллекции.
+- Используй `List`, `Set`, `Map` как интерфейсы в сигнатурах, если конкретная реализация не важна.
+- Выбирай структуру данных под задачу, а не по привычке.
+
+## 15. Конфигурация
+
+- Не хардкодь пути, токены, пароли, URL и настройки окружения в коде.
+- Конфигурация должна быть вынесена в config-файлы, переменные окружения или настройки приложения.
+- Секреты не должны попадать в git.
+- Значения по умолчанию должны быть безопасными и понятными.
+
+## 16. Тесты
+
+- Пиши тесты для бизнес-логики, сервисов, мапперов, валидаторов и сложных условий.
+- UI-тесты добавляй для важных пользовательских сценариев.
+- Тест должен проверять поведение, а не внутреннюю реализацию.
+- Не тестируй Lombok-generated boilerplate.
+- Для сервисов мокай внешние зависимости, если это unit-тест.
+- Для интеграционных тестов проверяй реальные взаимодействия между слоями.
+- Название теста должно объяснять сценарий и ожидаемый результат.
+- Баг без теста может вернуться. Если исправляешь баг, добавь тест, когда это разумно.
+
+## 17. Логирование
+
+- Логи должны помогать понять, что произошло.
+- Не логируй пароли, токены, персональные данные и секреты.
+- Не используй `System.out.println` для продакшен-логов.
+- Используй уровни логирования осознанно:
+  - `debug` для деталей диагностики;
+  - `info` для важных событий;
+  - `warn` для подозрительных, но не критичных ситуаций;
+  - `error` для ошибок, требующих внимания.
+- Не логируй одно и то же исключение много раз на разных слоях без причины.
+
+## 18. Concurrency и async
+
+- Не блокируй UI thread.
+- Не делай shared mutable state без синхронизации или понятного ownership.
+- Используй thread-safe структуры или явные механизмы синхронизации.
+- Для большого количества IO-задач предпочитай virtual threads, если они подходят сценарию.
+- CPU-heavy задачи вроде парсинга AST и анализа графа запускай в bounded executor, а не безлимитно.
+- Multi-agent и sub-agent задачи должны иметь лимиты параллелизма, budget и понятный owner.
+- Одновременно писать в один файл может только один агентный процесс через WorkspaceSafety.
+- Отмена задач должна быть обработана корректно.
+- Ошибки из фоновых задач должны доходить до пользователя или логов.
+
+## 18.1 Performance правила
+
+- Приложение должно оставаться отзывчивым: JavaFX Application Thread нельзя блокировать сканированием, LLM-вызовами, shell-командами, git, SQLite scan или graph indexing.
+- Используй GraalVM как performance-направление: benchmark startup/memory/native-image, но не ломай production packaging ради преждевременной оптимизации.
+- Для desktop-релиза сначала допускается JVM runtime через jpackage/install4j, если GraalVM native-image создает хрупкость.
+- Индексация проекта должна быть incremental: content hash, skip unchanged files, batch writes, transactions.
+- Длинные операции должны иметь progress, cancellation и понятный статус.
+- Кэши должны быть ограничены по размеру.
+- Логи и agent events не должны бесконечно расти в UI.
+
+## 19. Безопасность
+
+- Валидируй входные данные.
+- Не доверяй данным из UI, файлов, сети или БД без проверки.
+- Не собирай SQL или команды через конкатенацию строк.
+- Используй prepared statements, ORM-параметры или безопасные API.
+- Не храни секреты в коде.
+- Не показывай пользователю внутренние технические ошибки.
+- Ограничивай права доступа там, где есть роли или учетные записи.
+
+## 20. Производительность
+
+- Не оптимизируй преждевременно.
+- Сначала сделай код понятным и корректным, потом измеряй узкие места.
+- Не выполняй тяжелые операции в цикле, если можно сделать batch.
+- Не загружай большие данные полностью в память без необходимости.
+- Используй lazy loading, pagination или streaming, если данных много.
+- Не делай дорогую работу в JavaFX binding/listener без контроля частоты вызовов.
+
+## 21. Комментарии и документация
+
+- Комментарии нужны, чтобы объяснить "почему", а не пересказать "что".
+- Не оставляй устаревшие комментарии.
+- Публичные API и сложные доменные правила документируй.
+- TODO должен содержать конкретное действие, а не расплывчатую мысль.
+- Не оставляй мертвый код в комментариях.
+
+## 22. Форматирование и стиль
+
+- Следуй единому стилю форматирования проекта.
+- Не смешивай разные стили в одном файле.
+- Используй автоформаттер.
+- Импорты должны быть чистыми, без неиспользуемых зависимостей.
+- Один файл должен содержать одну основную public-сущность.
+- Не делай огромные строки.
+- Код должен проходить статический анализ, если он настроен.
+
+## 23. Правила для ИИ-генерации кода
+
+- Не генерируй код в контроллеры, если логика относится к сервисам, домену или репозиториям.
+- Не используй Entity как универсальный объект для всего.
+- Перед добавлением нового класса проверь, нет ли уже подходящего класса или паттерна в проекте.
+- Сохраняй существующую архитектуру и стиль проекта.
+- Не добавляй новую библиотеку без причины.
+- Не создавай абстракцию, если есть только одна реализация и нет понятной выгоды.
+- Не пиши большие куски кода без разделения по ответственности.
+- Не меняй публичные контракты без необходимости.
+- Не ломай обратную совместимость без явного решения.
+- Если есть выбор между коротким понятным кодом и длинным "идеальным" паттерном, выбирай короткий понятный код.
+- Если можно написать меньше кода без потери смысла, пиши меньше кода.
+- После изменения кода проверь компиляцию и тесты, если это возможно.
+
+## 24. Definition of Done
+
+Код считается готовым, если:
+
+- ответственность классов понятна;
+- слои не смешаны;
+- контроллеры тонкие;
+- бизнес-логика находится в сервисах или домене;
+- репозитории отвечают только за доступ к данным;
+- Entity не торчат в UI;
+- нет очевидного дублирования;
+- код читается без долгого объяснения;
+- ошибки обработаны осознанно;
+- нет секретов и хардкода окружения;
+- добавлены или обновлены нужные тесты;
+- проект компилируется;
+- форматирование применено;
+- решение не добавляет лишнюю сложность.
+
+
+
+================================================================================
+FILE: concept\01_product_vision.md
+PATH: C:\projects\chatly-code\concept\01_product_vision.md
+================================================================================
+
+# Product Vision
+
+## Одно предложение
+
+Chatly Code - локальный AI software engineer для desktop, который понимает проект, строит архитектурную карту, находит проблемы, создает задачи и безопасно меняет код под контролем разработчика.
+
+## Что это не такое
+
+- Не обычный чат с моделью.
+- Не замена IntelliJ IDEA или VS Code.
+- Не генератор кода "в пустоту".
+- Не облачная IDE, куда обязательно надо отправлять весь проект.
+- Не система, которая сама молча меняет файлы.
+
+## Что это такое
+
+Это локальная рабочая среда поверх существующего проекта:
+
+- сканирует проект;
+- объясняет архитектуру;
+- строит C4;
+- классифицирует проблемы;
+- создает задачи;
+- планирует изменения;
+- правит код через controlled tools;
+- запускает сборку и тесты;
+- показывает diff;
+- дает принять или откатить результат.
+
+## Главная рыночная боль
+
+Разработчики уже используют AI, но часто получают хаос:
+
+- модель не понимает весь проект;
+- код пишется без архитектурного контекста;
+- контроллеры, сервисы и репозитории смешиваются;
+- AI исправляет один баг и ломает соседний сценарий;
+- нет четкого разделения bug/improvement/tech debt;
+- нет безопасного workflow с branch, tests, rollback;
+- сложно доверять изменениям в legacy-проекте.
+
+Chatly Code должен закрыть эту боль через понятный процесс и сильный UX.
+
+## Обещание продукта
+
+Пользователь открывает старый проект и получает:
+
+- карту проекта;
+- C4-архитектуру;
+- список проблем;
+- список задач;
+- AI-агента, который умеет работать пошагово;
+- контроль над каждым рискованным действием;
+- проверку тестами;
+- diff-review перед принятием.
+
+## Целевая аудитория
+
+### Primary
+
+- Backend-разработчики.
+- Java/Spring-разработчики.
+- Разработчики, которые поддерживают legacy.
+- Solo-разработчики и indie hackers.
+- Малые команды без выделенного архитектора.
+
+### Secondary
+
+- Team leads.
+- Аутсорс-команды.
+- Enterprise-команды с ограничениями на отправку кода в облако.
+- Разработчики на Rust, JS, Python, Go, которым нужен локальный агент.
+
+## Отличие от OpenHands
+
+OpenHands дает агенту инструменты и runtime. Chatly Code должен взять этот фундаментальный подход, но усилить его в сторону desktop-продукта:
+
+- local-first;
+- architecture-first;
+- task-first;
+- safe-by-default;
+- C4-first;
+- project-understanding before coding;
+- качественный desktop UX;
+- постоянная память проекта.
+
+## Ключевая формула
+
+```text
+OpenHands дает агенту руки.
+Chatly Code должен дать агенту понимание проекта, архитектурную дисциплину и безопасный рабочий процесс.
+```
+
+## North Star
+
+Пользователь должен чувствовать, что он стал техническим руководителем для AI-агента:
+
+- сам не пишет рутину руками;
+- выбирает задачи;
+- утверждает план;
+- контролирует качество;
+- принимает готовые изменения.
+
+
+
+
+================================================================================
+FILE: concept\02_business_path.md
+PATH: C:\projects\chatly-code\concept\02_business_path.md
+================================================================================
+
+# Business Path
+
+## Product Category
+
+Desktop AI development assistant / local AI software engineer / AI maintenance IDE.
+
+Лучшее позиционирование:
+
+```text
+AI maintainer for legacy codebases.
+```
+
+или:
+
+```text
+Local agentic coding workspace for serious codebases.
+```
+
+## Главные Jobs To Be Done
+
+### 1. Понять незнакомый проект
+
+Когда разработчик открывает старый проект, он хочет быстро понять:
+
+- где entrypoints;
+- какие модули важные;
+- где бизнес-логика;
+- как запускаются тесты;
+- какие зависимости;
+- какие места рискованные.
+
+### 2. Передать рутинные задачи AI
+
+Разработчик хочет не писать руками:
+
+- перенос логики между слоями;
+- добавление тестов;
+- устранение дублирования;
+- маленькие багфиксы;
+- обновление документации;
+- простые рефакторинги.
+
+### 3. Сохранить контроль качества
+
+Разработчик хочет видеть:
+
+- план;
+- риски;
+- какие файлы будут изменены;
+- diff;
+- test output;
+- возможность rollback.
+
+### 4. Улучшать legacy постепенно
+
+Команда хочет не переписывать старый проект целиком, а улучшать его задачами:
+
+- bug;
+- risk;
+- improvement;
+- tech debt;
+- feature.
+
+## Рыночные боли
+
+- AI coding tools часто слишком chat-first.
+- Облачные агенты вызывают вопросы безопасности.
+- Legacy-проекты сложно объяснить модели.
+- Разработчики боятся принимать большие AI-diff.
+- Архитектура деградирует от неконтролируемой генерации.
+- В командах нет единого AI workflow.
+
+## Product Value
+
+### Для solo developer
+
+- быстрее чинить старый код;
+- быстрее добавлять фичи;
+- меньше ручной рутины;
+- понятнее diff и риски.
+
+### Для команды
+
+- единый процесс AI-разработки;
+- меньше хаотичных AI-правок;
+- архитектурная дисциплина;
+- повторяемый code review flow.
+
+### Для enterprise
+
+- local-first;
+- контроль команд;
+- audit log;
+- ограничения на tools;
+- возможность использовать свои модели.
+
+## Монетизация
+
+### Free
+
+- открыть локальный проект;
+- базовый scan;
+- базовый project overview;
+- ограниченный chat;
+- ограниченное количество agent tasks.
+
+### Pro
+
+- полный agentic editing;
+- C4 Architecture Explorer;
+- task board;
+- project memory;
+- unlimited projects;
+- model profiles;
+- advanced diff/review;
+- background updates.
+
+### Team
+
+- shared rules;
+- shared project profiles;
+- team policy templates;
+- import/export settings;
+- advanced audit log.
+
+### Enterprise
+
+- local-only mode enforcement;
+- private model gateway;
+- command allowlist/denylist;
+- MCP policy;
+- secrets policy;
+- offline license;
+- priority support.
+
+## Метрики успеха
+
+- Time to first project insight: меньше 2 минут на средний проект.
+- Time to first accepted AI change: меньше 10 минут.
+- Accepted diff rate: процент AI-изменений, принятых пользователем.
+- Rollback rate: должен снижаться с улучшением агента.
+- Test pass rate after agent task.
+- Weekly active projects.
+- Number of tasks completed per user per week.
+- Retention after first successful fix.
+
+## Go-To-Market
+
+Начать с понятного сегмента:
+
+```text
+Java/Spring legacy maintenance for individual developers and small teams.
+```
+
+Потом расширять:
+
+- Rust;
+- JS/TypeScript;
+- Python;
+- Go;
+- enterprise local AI.
+
+## Главный маркетинговый тезис
+
+```text
+Stop prompting. Start assigning tasks.
+```
+
+На русском:
+
+```text
+Не проси нейронку угадать. Ставь ей задачи и принимай проверенный diff.
+```
+
+
+
+
+================================================================================
+FILE: concept\03_customer_journey.md
+PATH: C:\projects\chatly-code\concept\03_customer_journey.md
+================================================================================
+
+# Customer Journey
+
+## Сценарий: старый проект
+
+Пользователь открывает Chatly Code. У него старый проект, где много хаоса, мало тестов и страшно менять код.
+
+## 1. Первый запуск
+
+Экран:
+
+```text
+Chatly Code
+
+[Open Project]
+[Recent Projects]
+[Model Settings]
+```
+
+Пользователь нажимает `Open Project` и выбирает папку.
+
+## 2. Сканирование
+
+Программа показывает понятный progress:
+
+```text
+Scanning project
+
+✓ Reading file tree
+✓ Detecting languages
+✓ Detecting build tools
+✓ Reading git status
+✓ Finding tests
+✓ Reading README/docs
+✓ Building dependency map
+✓ Detecting architecture layers
+✓ Preparing C4 draft
+```
+
+Пользователь видит, что программа работает с проектом осознанно, а не просто отправляет все в модель.
+
+## 3. Project Overview
+
+После сканирования открывается overview:
+
+```text
+Project: old-crm
+Stack: Java, Spring Boot, Gradle, PostgreSQL
+Git: clean
+Tests: JUnit, 146 tests
+Detected test command: ./gradlew test
+
+Health:
+4 bugs
+11 risks
+18 improvements
+9 tech debts
+```
+
+В центре краткое описание:
+
+```text
+Проект похож на монолитное Spring Boot приложение.
+Основной поток: REST Controller -> Service -> Repository -> PostgreSQL.
+В нескольких контроллерах есть бизнес-логика.
+Некоторые Entity используются как API DTO.
+```
+
+## 4. C4 Architecture
+
+Пользователь открывает вкладку `C4 Architecture`.
+
+Видит:
+
+- System Context;
+- Containers;
+- Components;
+- Code-level relationships.
+
+Клик по компоненту показывает:
+
+```text
+OrderController
+
+Files:
+- src/main/java/.../OrderController.java
+
+Depends on:
+- OrderService
+- OrderRepository
+
+Problems:
+- Controller directly uses repository
+- Business rule in controller
+- No tests for discount calculation
+```
+
+## 5. Problems
+
+Во вкладке `Problems` карточки сгруппированы:
+
+```text
+Bugs
+Risks
+Improvements
+Tech Debt
+Features
+```
+
+Карточка:
+
+```text
+BUG / High
+Null email can crash user creation
+
+Evidence:
+UserController.java:42
+UserService.java:88
+
+Suggested task:
+Validate email before user creation and add test.
+
+[Open] [Create Task] [Ignore]
+```
+
+## 6. Task Board
+
+Пользователь выбирает задачу:
+
+```text
+Move business logic out of OrderController
+```
+
+Экран задачи:
+
+```text
+What is wrong:
+OrderController calculates discount and checks order status.
+
+Why it matters:
+Controller is now mixed with business logic.
+This makes code hard to test and easy to break.
+
+Suggested plan:
+1. Move discount rules to OrderService.
+2. Keep controller as request/response layer.
+3. Add OrderService tests.
+4. Run detected project tests.
+```
+
+Кнопки:
+
+```text
+[Generate Plan] [Run Agent] [Defer] [Ignore]
+```
+
+## 7. Plan Approval
+
+Агент пишет план:
+
+```text
+Plan
+
+1. Read OrderController and OrderService.
+2. Locate discount and status rules.
+3. Move rules into service methods.
+4. Update controller to call service.
+5. Add tests for discount cases.
+6. Run detected test command.
+```
+
+Пользователь видит:
+
+```text
+Files likely to change:
+- OrderController.java
+- OrderService.java
+- OrderServiceTest.java
+
+Risk:
+Medium
+```
+
+Кнопки:
+
+```text
+[Approve and create branch] [Edit plan] [Cancel]
+```
+
+## 8. Safe Execution
+
+После подтверждения:
+
+```text
+Creating checkpoint
+Creating branch: agent/order-controller-cleanup
+```
+
+Агент работает:
+
+```text
+Reading OrderController.java
+Reading OrderService.java
+Applying patch
+Running detected test command
+```
+
+Пользователь видит action log, terminal и diff.
+
+## 9. Review
+
+Когда задача завершена:
+
+```text
+Done
+
+Changed files:
+3
+
+Tests:
+146 passed
+
+Risk:
+Low after tests
+```
+
+Кнопки:
+
+```text
+[Accept Changes]
+[Request Revision]
+[Rollback]
+[Create Commit]
+```
+
+## 10. Регулярная работа
+
+После нескольких задач проект накапливает память:
+
+- что за архитектура;
+- какие правила проекта;
+- какие решения уже приняты;
+- какие задачи были закрыты;
+- какие файлы рискованные.
+
+Пользователь начинает работать не через "напиши мне код", а через:
+
+```text
+Покажи проблемы
+Сделай план
+Исправь задачу
+Запусти тесты
+Покажи diff
+```
+
+
+
+================================================================================
+FILE: concept\04_ux_ui_spec.md
+PATH: C:\projects\chatly-code\concept\04_ux_ui_spec.md
+================================================================================
+
+# UX/UI Specification
+
+## UX Principle
+
+Приложение должно ощущаться как рабочий инструмент разработчика, а не как лендинг или игрушечный чат.
+
+Главный UX:
+
+```text
+Проект -> Архитектура -> Проблемы -> Задачи -> План -> Изменения -> Проверка -> Принятие
+```
+
+## Layout
+
+Основной layout:
+
+```text
++--------------------------------------------------------------------------------+
+| Top Bar: Project / Branch / Model / Agent Status / Update Status               |
++----------------------+----------------------------------+----------------------+
+| Project Explorer     | Main Workspace                   | Inspector            |
+|                      |                                  |                      |
+| files/modules        | Overview / Agent / C4 / Diff     | Problems / Task      |
+| architecture nodes   |                                  | Details / Risk       |
+| symbols              |                                  |                      |
++----------------------+----------------------------------+----------------------+
+| Bottom Panel: Terminal / Test Output / Agent Log / Problems                    |
++--------------------------------------------------------------------------------+
+```
+
+## Top Bar
+
+Содержит:
+
+- название проекта;
+- текущую git branch;
+- выбранную модель;
+- статус агента;
+- статус sandbox;
+- update indicator;
+- settings.
+
+Пример:
+
+```text
+old-crm | main | GPT-4.1 / Local Ollama | Agent: idle | Sandbox: local | Update ready
+```
+
+## Left Sidebar
+
+Tabs:
+
+- Files.
+- Modules.
+- Architecture.
+- Search.
+
+Files:
+
+```text
+src
+  main
+    java
+  test
+build.gradle
+README.md
+```
+
+Modules:
+
+```text
+api
+domain
+persistence
+web
+```
+
+Architecture:
+
+```text
+Controllers
+Services
+Repositories
+External Clients
+Database
+```
+
+## Main Workspace
+
+Tabs:
+
+```text
+Overview
+Conversation
+Agent
+Terminal
+C4
+Problems
+Tasks
+Plan
+Git Changes
+Diff
+Knowledge
+Settings
+```
+
+### Overview
+
+Показывает:
+
+- stack;
+- project summary;
+- health score;
+- detected commands;
+- recent tasks;
+- architecture summary.
+
+Карточки должны быть плотными, без marketing hero.
+
+### Agent
+
+Не просто чат, а рабочий журнал:
+
+```text
+User: Fix task T-104
+Agent: I will inspect files first.
+Tool: Search "OrderController"
+Observation: 3 matches
+Tool: Read OrderController.java
+Agent: Found business logic in controller.
+```
+
+Каждое действие collapsible.
+
+### Conversation
+
+Direct OpenHands-like task flow:
+
+```text
+User: Add monthly CSV export for orders.
+Agent: I will inspect the project and propose a plan.
+Tool: Graph search order export
+Observation: OrderService, OrderRepository and OrderController are relevant.
+Agent: Plan ready. Waiting for approval.
+```
+
+Conversation must not hide tool actions. Tool calls, terminal output, file changes and observations must be linked from the conversation.
+
+### Terminal
+
+Shows runtime command output.
+
+Required:
+
+- process/docker/remote runtime status;
+- running command;
+- stdout/stderr stream;
+- exit code;
+- command duration;
+- stop command action where policy allows it.
+
+Agent commands are read-only by default. Interactive terminal is a separate explicit mode.
+
+### C4
+
+Вкладки:
+
+```text
+Context
+Containers
+Components
+Code
+```
+
+Справа inspector выбранного узла.
+
+Клик по узлу:
+
+- files;
+- dependencies;
+- incoming/outgoing relations;
+- problems;
+- tasks;
+- generate task button.
+
+### Plan
+
+Показывает текущий план агента:
+
+```text
+1. Inspect OrderController
+2. Move rules to OrderService
+3. Add tests
+4. Run build
+```
+
+Пользователь может:
+
+- approve;
+- edit;
+- reject;
+- request smaller plan.
+
+### Diff
+
+Должен быть центральной частью доверия.
+
+Нужно:
+
+- list of changed files;
+- side-by-side diff;
+- inline comments later;
+- accept/reject file;
+- accept all;
+- rollback.
+
+### Git Changes
+
+Shows repository state:
+
+- current branch;
+- changed files;
+- staged/unstaged status;
+- checkpoint;
+- file-level diff;
+- create commit action;
+- rollback action.
+
+### Knowledge
+
+Показывает:
+
+- project rules;
+- architecture notes;
+- generated summaries;
+- C4 docs;
+- decisions.
+
+## Right Inspector
+
+Контекстно меняется.
+
+Для задачи:
+
+```text
+Task T-104
+Type: Improvement
+Severity: Medium
+Confidence: High
+Status: Planning
+
+Files:
+- OrderController.java
+- OrderService.java
+
+Actions:
+[Run Agent]
+[Edit Task]
+[Ignore]
+```
+
+Для проблемы:
+
+```text
+Problem
+Type: Bug
+Evidence:
+UserService.java:88
+
+Why it matters:
+...
+
+[Create Task]
+```
+
+Для C4 node:
+
+```text
+Component: OrderService
+Responsibilities:
+- order validation
+- discount calculation
+
+Depends on:
+- OrderRepository
+- PaymentClient
+
+Problems:
+2
+```
+
+## Bottom Panel
+
+Tabs:
+
+- Terminal.
+- Tests.
+- Agent Log.
+- Problems.
+
+Terminal должен быть read-only по умолчанию для agent commands, но пользователь может открыть interactive terminal отдельно.
+
+## Visual Style
+
+- Плотный professional UI.
+- Минимум декоративных элементов.
+- Карточки только для повторяемых сущностей: tasks, problems, changed files.
+- Цвета статусов должны быть функциональными:
+  - red: bug/high risk;
+  - amber: warning/tech debt;
+  - blue: improvement;
+  - green: done/pass;
+  - gray: neutral.
+- Не использовать огромные hero-блоки.
+- Не использовать декоративные gradient blobs.
+- Текст должен помещаться в кнопки и панели.
+
+## Localization UX
+
+The UI must be multilingual from the first commercial version.
+
+Required languages:
+
+- English, default;
+- Russian.
+
+Rules:
+
+- Do not hardcode user-facing strings in JavaFX controllers or views.
+- Every label, button, menu, tooltip, dialog and empty state must use Spring-backed i18n keys.
+- Use Spring `MessageSource` and resource bundles as the canonical corporate localization approach.
+- User can change language in Settings.
+- Language switch should not require reinstall.
+- If possible, language switch should apply without full app restart.
+- Agent technical prompts may stay English internally for model quality.
+- User-facing agent summaries should be rendered in the selected UI language.
+- Layout must handle longer Russian strings without clipping.
+- Buttons must have stable min widths and responsive text wrapping where needed.
+
+Settings example:
+
+```text
+Language: English / Русский
+Default: English
+```
+
+## Empty States
+
+После первого запуска:
+
+```text
+Open a local project to scan architecture, detect tasks, and start safe agentic coding.
+```
+
+Если проблем нет:
+
+```text
+No critical problems found. You can run a deeper analysis or create a custom task.
+```
+
+Если нет модели:
+
+```text
+No model configured.
+Add OpenAI, Anthropic-compatible, or local Ollama model.
+```
+
+## Critical UX Rules
+
+- Перед изменениями всегда показывать план.
+- Перед опасной shell-командой всегда confirmation.
+- После изменений всегда показывать diff.
+- После failed tests показывать причину и действия.
+- Пользователь должен понимать, что агент делает прямо сейчас.
+- Никогда не скрывать file changes.
+- Rollback должен быть очевидным.
+
+
+
+================================================================================
+FILE: concept\05_c4_architecture.md
+PATH: C:\projects\chatly-code\concept\05_c4_architecture.md
+================================================================================
+
+# C4 Architecture
+
+Этот документ описывает C4-архитектуру самого Chatly Code.
+
+## C1: System Context
+
+```mermaid
+flowchart LR
+    dev["Developer"]
+    app["Chatly Code Desktop App"]
+    project["Local Source Code Project"]
+    llm["LLM Providers\nOpenAI / Anthropic-compatible / Ollama"]
+    mcp["MCP Servers"]
+    docker["Docker / Podman"]
+    git["Git Providers\nGitHub / GitLab / Bitbucket"]
+
+    dev -->|"opens project, reviews plans, accepts diffs"| app
+    app -->|"reads, scans, edits with approval"| project
+    app -->|"chat/completion/embedding requests"| llm
+    app -->|"tool calls"| mcp
+    app -->|"sandboxed execution"| docker
+    app -->|"optional clone, PR, issue, CI metadata"| git
+```
+
+## C2: Containers
+
+```mermaid
+flowchart TB
+    subgraph desktop["Chatly Code Desktop"]
+        javafx["JavaFX UI"]
+        backend["Spring Boot Local Backend"]
+        sqlite["SQLite Local DB"]
+        updater["Updater"]
+    end
+
+    subgraph runtime["Execution Runtime"]
+        localrt["Local Process Runtime"]
+        dockerrt["Docker Sandbox Runtime"]
+    end
+
+    subgraph external["External Systems"]
+        llm["LLM Providers"]
+        mcp["MCP Servers"]
+        git["Git Providers"]
+    end
+
+    javafx -->|"service calls/events"| backend
+    backend --> sqlite
+    backend --> localrt
+    backend --> dockerrt
+    backend --> llm
+    backend --> mcp
+    backend --> git
+    updater --> backend
+```
+
+## C3: Spring Boot Backend Components
+
+```mermaid
+flowchart TB
+    ui["JavaFX UI"]
+
+    subgraph core["Spring Boot Core"]
+        projectScanner["Project Scanner"]
+        codeGraph["Code Graph Engine"]
+        architectureEngine["Architecture Engine"]
+        problemDetector["Problem Detector"]
+        taskManager["Task Manager"]
+        agentCore["Agent Core"]
+        toolRuntime["Tool Runtime"]
+        workspaceSafety["Workspace Safety"]
+        llmGateway["LLM Gateway"]
+        knowledgeStore["Knowledge Store"]
+        updateService["Update Service"]
+    end
+
+    db["SQLite"]
+    project["Local Project"]
+    docker["Docker Runtime"]
+    llm["LLM Provider"]
+    mcp["MCP"]
+
+    ui --> taskManager
+    ui --> agentCore
+    ui --> architectureEngine
+
+    projectScanner --> project
+    projectScanner --> knowledgeStore
+    codeGraph --> projectScanner
+    codeGraph --> project
+    codeGraph --> knowledgeStore
+    architectureEngine --> codeGraph
+    problemDetector --> architectureEngine
+    problemDetector --> codeGraph
+    problemDetector --> taskManager
+    taskManager --> agentCore
+    agentCore --> toolRuntime
+    agentCore --> codeGraph
+    agentCore --> llmGateway
+    toolRuntime --> workspaceSafety
+    toolRuntime --> project
+    toolRuntime --> docker
+    toolRuntime --> mcp
+    llmGateway --> llm
+    knowledgeStore --> db
+    updateService --> db
+```
+
+## C4: Agent Task Code-Level Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as JavaFX UI
+    participant TaskManager
+    participant AgentCore
+    participant LLMGateway
+    participant Tools as Tool Runtime
+    participant Safety as Workspace Safety
+    participant Project
+    participant Tests as Test Runner
+
+    User->>UI: Select task and click Run Agent
+    UI->>TaskManager: load task
+    TaskManager->>AgentCore: create planning session
+    AgentCore->>LLMGateway: request plan
+    LLMGateway-->>AgentCore: plan
+    AgentCore-->>UI: PlanCreated event
+    User->>UI: Approve plan
+    UI->>Safety: create branch/checkpoint
+    Safety-->>UI: checkpoint ready
+    AgentCore->>Tools: read/search/edit files
+    Tools->>Project: apply controlled patch
+    Tools-->>AgentCore: observations
+    AgentCore->>Tests: run build/tests
+    Tests-->>AgentCore: test results
+    AgentCore-->>UI: NeedsReview with diff
+    User->>UI: Accept / rollback / request revision
+```
+
+## C4 generation for user projects
+
+Для открытого пользовательского проекта Chatly Code должен генерировать:
+
+- C1 System Context.
+- C2 Containers.
+- C3 Components.
+- C4 Code-level relationships.
+
+Файлы:
+
+```text
+docs/architecture/c4-context.md
+docs/architecture/c4-containers.md
+docs/architecture/c4-components.md
+docs/architecture/c4-code.md
+```
+
+## Architecture Node Model
+
+Каждый узел C4 должен иметь:
+
+- id;
+- name;
+- type: system/container/component/code;
+- technology;
+- description;
+- source files;
+- incoming dependencies;
+- outgoing dependencies;
+- detected problems;
+- linked tasks.
+
+## C4 UX
+
+C4 не должен быть просто картинкой. Это navigation surface:
+
+```text
+Diagram node -> files -> dependencies -> problems -> tasks -> agent fix
+```
+
+## Code Graph Backbone
+
+C4-модель строится поверх локального code graph:
+
+```text
+CodeNode(file/class/method/route/component)
+-> CodeEdge(contains/imports/calls/references/implements/extends)
+-> ArchitectureNode(system/container/component/code)
+-> C4 diagram
+```
+
+Правило: C4 должен опираться на deterministic evidence из AST/resolver, а LLM используется для описаний и группировки только после того, как есть фактический граф.
+
+
+
+================================================================================
+FILE: concept\06_system_architecture.md
+PATH: C:\projects\chatly-code\concept\06_system_architecture.md
+================================================================================
+
+# System Architecture
+
+## High-Level Modules
+
+```text
+chatly-code/
+  app-desktop/
+  app-core/
+  app-server/
+  agent-server/
+  agent-core/
+  project-scanner/
+  code-graph-engine/
+  language-spi/
+  language-java/
+  language-rust/
+  language-typescript/
+  architecture-engine/
+  problem-detector/
+  task-manager/
+  tool-runtime/
+  sandbox-service/
+  runtime-service/
+  conversation-service/
+  git-service/
+  workspace-safety/
+  llm-gateway/
+  knowledge-store/
+  localization/
+  performance-monitor/
+  updater/
+```
+
+## app-desktop
+
+JavaFX UI layer.
+
+Responsibilities:
+
+- render screens;
+- bind UI state;
+- show agent events;
+- show diff/test output;
+- collect user approvals;
+- never contain business logic;
+- never directly edit project files.
+
+Depends on:
+
+- app-core services;
+- UI view models.
+
+## app-core
+
+Spring Boot local backend inside desktop process.
+
+Responsibilities:
+
+- application lifecycle;
+- dependency injection;
+- module coordination;
+- event bus;
+- settings;
+- background jobs;
+- local API facade for UI.
+
+## app-server
+
+Spring Boot application boundary used by the JavaFX desktop UI.
+
+Responsibilities:
+
+- expose UI-facing application services;
+- manage projects, settings, tasks and conversations;
+- stream application events to JavaFX ViewModels;
+- coordinate app lifecycle;
+- keep desktop UI independent from agent/runtime implementation details.
+
+MVP can run app-server in the same JVM process as JavaFX, but the boundary must stay explicit.
+
+## agent-server
+
+Agent execution boundary.
+
+Responsibilities:
+
+- accept user tasks and conversation messages;
+- build graph-backed context;
+- call LLM through `llm-gateway`;
+- select tool actions;
+- process observations;
+- maintain agent state;
+- stream action/observation events;
+- stop repeated failure loops.
+
+MVP can run agent-server in the same JVM process, but it must remain separable from app-server and UI.
+
+## project-scanner
+
+Responsibilities:
+
+- file tree scan;
+- language detection;
+- build tool detection;
+- test command detection;
+- git status detection;
+- dependency manifest parsing;
+- README/docs extraction;
+- project summary input.
+- ignore rules and generated-file detection;
+- source file inventory for code graph indexing.
+
+Output:
+
+- `ProjectScan`;
+- `ProjectMap`;
+- `DetectedStack`;
+- `BuildProfile`;
+- `TestProfile`.
+
+## code-graph-engine
+
+Local deterministic code intelligence layer inspired by CodeGraph.
+
+Responsibilities:
+
+- parse source files with tree-sitter or equivalent AST parsers;
+- extract code nodes: files, modules, classes, interfaces, methods, functions, variables, routes, components;
+- extract direct edges: contains, imports, exports, calls, references, extends, implements, returns, type_of, instantiates, overrides, decorates;
+- store graph in SQLite tables;
+- store unresolved references during extraction;
+- run reference resolver after indexing;
+- resolve imports, aliases, package/workspace structure and framework-specific routes;
+- synthesize framework-aware edges only when there is clear evidence;
+- provide graph queries: callers, callees, impact radius, dependencies, dependents, circular dependencies;
+- build compact context for the agent so it does not need to read the whole repository;
+- keep graph fresh with file watcher, content hash, debounce sync and connect-time catch-up.
+
+Pipeline:
+
+```text
+files
+-> ExtractionOrchestrator
+-> SQLite nodes/edges/files/unresolved_refs
+-> ReferenceResolver
+-> GraphQueryService
+-> ContextBuilder
+-> Agent / C4 / Problem Detector
+```
+
+Important rule:
+
+The graph is deterministic and derived from source code. LLM summaries must not be the source of truth for nodes and edges.
+
+## language-spi
+
+Stable extension point for language/framework-specific analysis.
+
+Responsibilities:
+
+- define `LanguagePlugin`;
+- define language extractors;
+- define reference resolver interfaces;
+- define framework resolver interfaces;
+- define problem rule interfaces;
+- define build/test command detector interfaces;
+- expose normalized graph contracts.
+
+Generic core modules depend on `language-spi`, not on concrete language plugins.
+
+## language-java
+
+Java/Spring analyzer plugin.
+
+Responsibilities:
+
+- Java source extraction;
+- Java import/package/static import resolution;
+- Spring stereotype classification;
+- Spring route detection;
+- Spring dependency edge detection;
+- Java/Spring-specific problem rules.
+
+Must be extractable into a separate library later.
+
+## language-rust
+
+Rust analyzer plugin.
+
+Responsibilities:
+
+- Cargo manifest/workspace detection;
+- Rust source extraction;
+- module/use resolution;
+- Rust-specific problem rules.
+
+Must not depend on Java/Spring plugin.
+
+## language-typescript
+
+TypeScript/JavaScript analyzer plugin.
+
+Responsibilities:
+
+- package.json/script detection;
+- tsconfig path alias resolution;
+- import/export resolution;
+- TS/JS source extraction;
+- framework-specific extensions later.
+
+Must not depend on Java/Spring or Rust plugins.
+
+## architecture-engine
+
+Responsibilities:
+
+- module graph;
+- dependency graph;
+- C4 model;
+- architecture smells;
+- layer detection;
+- architecture documentation generation.
+
+Inputs:
+
+- `ProjectScan`;
+- `CodeGraph`;
+- source code metadata from code-graph-engine;
+- build manifests;
+- LLM summaries when needed.
+
+## problem-detector
+
+Responsibilities:
+
+- detect bugs;
+- detect risks;
+- detect improvements;
+- detect tech debt;
+- detect missing tests;
+- detect architecture violations.
+
+Important rule:
+
+Problem detector must separate evidence from interpretation.
+
+Example:
+
+```text
+Evidence:
+OrderController imports OrderRepository.
+
+Interpretation:
+Controller depends directly on persistence layer.
+
+Problem type:
+Architecture Risk / Improvement
+```
+
+## task-manager
+
+Responsibilities:
+
+- create tasks from problems;
+- track lifecycle;
+- assign priority;
+- connect tasks to files, C4 nodes and conversations;
+- maintain task queue.
+
+## agent-core
+
+Responsibilities:
+
+- planning;
+- execution loop;
+- action selection;
+- observation handling;
+- tool approval;
+- task completion;
+- failure recovery.
+
+Required OpenHands-like loop:
+
+```text
+task
+-> context
+-> plan
+-> action
+-> observation
+-> next action
+-> patch
+-> diff
+-> detected target-project test/build command
+-> observation
+-> review
+```
+
+## tool-runtime
+
+Responsibilities:
+
+- controlled file read;
+- controlled search;
+- controlled edit;
+- shell commands;
+- git commands;
+- test/build commands;
+- Docker runtime;
+- MCP calls.
+
+All tool calls must emit events.
+
+## sandbox-service
+
+Responsibilities:
+
+- create process runtime;
+- create Docker/Podman runtime;
+- connect to remote runtime later;
+- report runtime status;
+- start, stop, pause and resume runtime;
+- enforce command policy;
+- stream terminal output;
+- clean resources.
+
+Runtime modes:
+
+- process;
+- docker;
+- remote.
+
+## runtime-service
+
+Responsibilities:
+
+- execute approved commands;
+- manage command timeouts;
+- capture stdout/stderr;
+- expose terminal streams;
+- map command result to observations;
+- keep runtime details out of agent-core.
+
+## conversation-service
+
+Responsibilities:
+
+- persist conversations;
+- store user messages;
+- store agent messages;
+- store action/observation trajectory;
+- connect conversation to project, task, files and git changes.
+
+## git-service
+
+Responsibilities:
+
+- git status;
+- branch creation;
+- checkpoint;
+- changed files;
+- diff;
+- commit;
+- rollback through safe APIs.
+
+## workspace-safety
+
+Responsibilities:
+
+- git branch creation;
+- checkpoint creation;
+- dirty worktree checks;
+- rollback;
+- diff collection;
+- dangerous command policy;
+- file write policy.
+
+## llm-gateway
+
+Responsibilities:
+
+- Spring AI integration;
+- model profiles;
+- provider routing;
+- prompt templates;
+- token/cost tracking;
+- retries;
+- streaming responses;
+- embeddings.
+
+Must support:
+
+- OpenAI-compatible APIs;
+- local Ollama;
+- later Anthropic-compatible providers if Spring AI supports target model.
+
+## knowledge-store
+
+Responsibilities:
+
+- SQLite persistence;
+- project scans;
+- code graph tables;
+- architecture model;
+- tasks;
+- conversations;
+- tool events;
+- file changes;
+- test runs;
+- generated docs;
+- summaries.
+
+## localization
+
+Spring-style localization module.
+
+Responsibilities:
+
+- configure `MessageSource`;
+- load `messages.properties`, `messages_en.properties`, `messages_ru.properties`;
+- expose locale-aware message service to JavaFX ViewModels;
+- store selected language in settings;
+- use English as default locale;
+- use Russian as required built-in locale;
+- keep all user-facing strings behind message keys.
+
+Important rule:
+
+Localization must follow standard Spring corporate patterns. Avoid custom ad-hoc translation registries unless they wrap Spring `MessageSource`.
+
+## performance-monitor
+
+Responsibilities:
+
+- track UI responsiveness;
+- track project scan time;
+- track graph indexing throughput;
+- track agent task latency;
+- track memory usage;
+- track tool queue depth;
+- expose diagnostics for support;
+- collect local-only metrics unless user explicitly enables telemetry.
+
+## updater
+
+Responsibilities:
+
+- check update metadata;
+- download update in background;
+- verify signature/hash;
+- prompt restart;
+- hand off to installer/updater.
+
+## Communication Pattern
+
+UI should subscribe to application events:
+
+```text
+ProjectScanStarted
+ProjectScanProgress
+ProblemDetected
+TaskCreated
+PlanCreated
+ToolActionStarted
+ToolActionFinished
+FileChanged
+TestsFinished
+AgentNeedsReview
+```
+
+This keeps UI reactive and avoids blocking JavaFX Application Thread.
+
+
+
+================================================================================
+FILE: concept\07_agent_runtime.md
+PATH: C:\projects\chatly-code\concept\07_agent_runtime.md
+================================================================================
+
+# Agent Runtime
+
+## Core Loop
+
+Agent runtime is an event-driven loop:
+
+```text
+Task
+-> Context building
+-> Plan
+-> Approval
+-> Action
+-> Observation
+-> Next action
+-> Tests
+-> Review
+-> Done / Failed / Rollback
+```
+
+This loop is mandatory OpenHands-like behavior. The agent must be able to inspect files, modify files through controlled patches, run approved commands, observe results and continue until the task reaches review, failure or rollback.
+
+## Runtime Boundary
+
+Agent runtime must be separated from UI and app orchestration.
+
+Required runtime modes:
+
+```text
+process
+docker
+remote
+```
+
+MVP may implement only process runtime first, but interfaces must support Docker/Podman and remote runtime without redesign.
+
+Runtime responsibilities:
+
+- execute approved commands;
+- stream stdout/stderr to Terminal;
+- enforce command policy;
+- apply timeouts;
+- report runtime status;
+- emit command observations.
+
+Sandbox responsibilities:
+
+- start runtime;
+- stop runtime;
+- pause/resume where supported;
+- filter environment variables;
+- mount workspace safely;
+- apply resource limits where supported.
+
+## Spring AI Agent Utils Requirement
+
+Coding-agent tools must be based on `spring-ai-agent-utils` where possible.
+
+Reference local example:
+
+```text
+C:\projects\chatly-code\examples\spring-ai-agent-utils-main
+```
+
+Use it for:
+
+- file system tools;
+- shell tools;
+- grep/glob tools;
+- todo/task tools;
+- skills;
+- subagent framework;
+- memory tools;
+- A2A subagents.
+
+Chatly Code must wrap these tools with:
+
+- workspace root restrictions;
+- approval policy;
+- sandbox/runtime policy;
+- secret redaction;
+- action/observation event emission;
+- diff collection;
+- rollback support.
+
+Do not write a custom coding-agent tool framework unless the library is proven insufficient for a specific requirement.
+
+## Task States
+
+```text
+CREATED
+ANALYZING
+PLANNING
+WAITING_APPROVAL
+CHECKPOINTING
+EXECUTING
+RUNNING_TESTS
+NEEDS_REVIEW
+DONE
+FAILED
+ROLLED_BACK
+CANCELLED
+```
+
+## Event Types
+
+```text
+UserMessage
+AgentMessage
+AgentThought
+PlanCreated
+PlanApproved
+ToolActionStarted
+ToolActionFinished
+ToolObservation
+FileRead
+FileChanged
+CommandStarted
+CommandFinished
+TestRunStarted
+TestRunFinished
+RiskWarning
+ApprovalRequested
+TaskStatusChanged
+TaskFinished
+TaskFailed
+RollbackFinished
+```
+
+## Tool Types
+
+### ReadFileTool
+
+Use/adapt Spring AI Agent Utils file system tooling. Reads file content with size limits.
+
+### SearchTool
+
+Use/adapt Spring AI Agent Utils grep/search tooling where possible.
+
+### ListFilesTool
+
+Use/adapt Spring AI Agent Utils glob/file tooling where possible.
+
+### ApplyPatchTool
+
+Use/adapt Spring AI Agent Utils file edit tooling, but all writes must pass through Chatly Code `workspace-safety`. Must emit diff.
+
+### ShellTool
+
+Use/adapt Spring AI Agent Utils shell tooling. Dangerous commands require approval and runtime policy.
+
+### GitTool
+
+Supports:
+
+- status;
+- branch;
+- diff;
+- commit;
+- restore through safe APIs only;
+- log.
+
+### BuildTool
+
+Runs detected build command.
+
+### TestTool
+
+Runs detected test command.
+
+### DockerTool
+
+Creates and controls Docker/Podman sandbox runtime.
+
+### RuntimeTool
+
+Reports runtime status and controls process/docker/remote runtime lifecycle.
+
+### ConversationTool
+
+Reads and writes durable conversation/task trajectory events.
+
+### McpTool
+
+Calls configured MCP servers under policy control.
+
+### C4DiagramTool
+
+Generates or updates C4 diagrams.
+
+## Approval Rules
+
+No approval required:
+
+- read file;
+- list files;
+- search;
+- git status;
+- git diff;
+
+Approval required:
+
+- edit file;
+- run shell command;
+- create branch;
+- install dependency;
+- network call through tool;
+- Docker container start;
+
+High-risk approval required:
+
+- delete files;
+- recursive changes;
+- run scripts from project;
+- package manager install;
+- commands touching credentials;
+- force push;
+- destructive git commands.
+
+## Planning Rules
+
+Before editing, agent must produce:
+
+- task summary;
+- files likely to change;
+- step-by-step plan;
+- test strategy;
+- risk level;
+- rollback strategy.
+
+## Context Building
+
+Agent context should include:
+
+- task;
+- project rules;
+- graph context from code-graph-engine;
+- relevant code nodes and edges;
+- relevant files;
+- architecture nodes;
+- related problems;
+- previous task history;
+- build/test commands;
+- git status;
+- constraints.
+
+Before reading files manually, the agent should query the local code graph:
+
+```text
+task text
+-> graph search/explore
+-> relevant symbols, flows, callers/callees, source snippets
+-> plan
+```
+
+Manual file reads are allowed, but graph context is the first-class discovery mechanism.
+
+## Failure Handling
+
+If tests fail:
+
+- show failing command;
+- show failing tests;
+- summarize likely cause;
+- offer:
+  - fix;
+  - rollback;
+  - ask user;
+  - mark failed.
+
+If tool command fails:
+
+- do not hide failure;
+- add event;
+- decide next step;
+- avoid repeating same failing command endlessly.
+
+## Agent Roles
+
+MVP can use one agent with modes:
+
+- Analyzer.
+- Planner.
+- Implementer.
+- Tester.
+- Reviewer.
+
+Later multi-agent:
+
+- ArchitectAgent;
+- FixerAgent;
+- ReviewerAgent;
+- TestAgent;
+- SecurityAgent.
+
+## OpenHands Ideas to Preserve
+
+- actions and observations are first-class;
+- every conversation has durable history;
+- tools are explicit;
+- agent can plan and track tasks;
+- sandbox is separate from UI;
+- skills/rules extend behavior.
+- agent can read files, edit files and run commands;
+- process, docker and remote runtimes are first-class;
+- terminal output is visible;
+- git changes and diff are first-class review surfaces;
+- direct "give task and agent works" flow must work even without C4/task-board usage.
+
+## CodeGraph Ideas to Preserve
+
+- deterministic AST extraction before LLM reasoning;
+- local SQLite graph;
+- nodes, edges, files and unresolved references;
+- resolver pass after indexing;
+- framework-aware routes and synthetic edges only with clear provenance;
+- watcher and debounce sync;
+- stale-context warning;
+- explore-style graph tool that gives enough context to avoid grep/read loops.
+
+
+
+================================================================================
+FILE: concept\08_domain_model.md
+PATH: C:\projects\chatly-code\concept\08_domain_model.md
+================================================================================
+
+# Domain Model
+
+## Project
+
+Represents a local source code project.
+
+Fields:
+
+- id;
+- name;
+- rootPath;
+- detectedStack;
+- gitInfo;
+- createdAt;
+- lastOpenedAt;
+- settings;
+- scanStatus.
+
+## ProjectScan
+
+Represents one scan result.
+
+Fields:
+
+- id;
+- projectId;
+- startedAt;
+- finishedAt;
+- status;
+- detectedLanguages;
+- buildTools;
+- testCommands;
+- dependencyFiles;
+- readmeFiles;
+- sourceFileCount;
+- ignoredFileCount;
+- summary.
+
+## ArchitectureNode
+
+Represents C4 node or internal architecture element.
+
+Fields:
+
+- id;
+- projectId;
+- scanId;
+- level: context/container/component/code;
+- type;
+- name;
+- technology;
+- description;
+- sourceFiles;
+- responsibilities.
+
+## CodeFile
+
+Represents indexed source file in the local code graph.
+
+Fields:
+
+- path;
+- contentHash;
+- language;
+- size;
+- modifiedAt;
+- indexedAt;
+- nodeCount;
+- generated;
+- testFile;
+- errorsJson.
+
+## CodeNode
+
+Represents deterministic code symbol extracted from AST or framework metadata.
+
+Fields:
+
+- id;
+- kind;
+- name;
+- qualifiedName;
+- filePath;
+- language;
+- startLine;
+- endLine;
+- startColumn;
+- endColumn;
+- docstring;
+- signature;
+- visibility;
+- exported;
+- async;
+- static;
+- abstract;
+- decoratorsJson;
+- typeParametersJson;
+- updatedAt.
+
+## CodeEdge
+
+Represents relationship between code nodes.
+
+Fields:
+
+- id;
+- sourceNodeId;
+- targetNodeId;
+- kind;
+- metadataJson;
+- line;
+- column;
+- provenance;
+- confidence.
+
+## CodeUnresolvedReference
+
+Represents reference collected during extraction and resolved later.
+
+Fields:
+
+- id;
+- fromNodeId;
+- referenceName;
+- referenceKind;
+- filePath;
+- language;
+- line;
+- column;
+- candidatesJson.
+
+## ArchitectureEdge
+
+Represents dependency/relation.
+
+Fields:
+
+- id;
+- sourceNodeId;
+- targetNodeId;
+- relationType;
+- description;
+- evidence;
+- confidence.
+
+## Problem
+
+Represents detected issue.
+
+Fields:
+
+- id;
+- projectId;
+- scanId;
+- type: bug/risk/improvement/tech_debt/feature/security;
+- severity: low/medium/high/critical;
+- confidence;
+- title;
+- description;
+- evidence;
+- affectedFiles;
+- architectureNodeIds;
+- status: open/ignored/converted_to_task/resolved;
+
+## Task
+
+Represents actionable work.
+
+Fields:
+
+- id;
+- projectId;
+- sourceProblemId;
+- type;
+- title;
+- description;
+- acceptanceCriteria;
+- priority;
+- risk;
+- status;
+- affectedFiles;
+- createdAt;
+- updatedAt;
+
+## Conversation
+
+Represents agent session.
+
+Fields:
+
+- id;
+- projectId;
+- taskId;
+- title;
+- modelProfileId;
+- status;
+- createdAt;
+- updatedAt;
+
+## AgentEvent
+
+Represents durable event in session.
+
+Fields:
+
+- id;
+- conversationId;
+- type;
+- timestamp;
+- actor: user/agent/tool/system;
+- payloadJson;
+- visible;
+
+## ToolAction
+
+Represents requested tool call.
+
+Fields:
+
+- id;
+- conversationId;
+- toolName;
+- argumentsJson;
+- risk;
+- approvalState;
+- startedAt;
+- finishedAt;
+- resultStatus;
+
+## FileChange
+
+Represents controlled file modification.
+
+Fields:
+
+- id;
+- taskId;
+- conversationId;
+- path;
+- changeType;
+- diff;
+- createdAt;
+- accepted;
+
+## TestRun
+
+Represents test/build result.
+
+Fields:
+
+- id;
+- taskId;
+- command;
+- exitCode;
+- stdoutPath;
+- stderrPath;
+- startedAt;
+- finishedAt;
+- summary;
+
+## ModelProfile
+
+Fields:
+
+- id;
+- name;
+- provider;
+- model;
+- baseUrl;
+- apiKeySecretRef;
+- useForChat;
+- useForPlanning;
+- useForEmbeddings;
+
+## Settings
+
+Fields:
+
+- theme;
+- language;
+- updateChannel;
+- telemetryEnabled;
+- defaultModelProfileId;
+- sandboxMode;
+- commandPolicy;
+- secretsPolicy.
+
+## SQLite Tables
+
+```text
+projects
+project_scans
+code_files
+code_nodes
+code_edges
+code_unresolved_refs
+code_graph_metadata
+architecture_nodes
+architecture_edges
+problems
+tasks
+conversations
+agent_events
+tool_actions
+file_changes
+test_runs
+model_profiles
+settings
+localization_messages
+update_state
+```
+
+## Domain Rules
+
+- A problem can exist without a task.
+- A task can exist without a problem if user created it manually.
+- A task can have many conversations.
+- A conversation can have many tool actions.
+- Every file change must belong to a task or explicit user-approved session.
+- Every accepted file change must be reviewable through diff.
+- Code graph nodes and edges are deterministic evidence, not LLM guesses.
+- Architecture nodes may reference many code nodes.
+- Problems should link to code nodes, code edges or files as evidence.
+- Unresolved references are valid graph data and must not be silently treated as resolved.
+
+
+
+================================================================================
+FILE: concept\09_security_safety.md
+PATH: C:\projects\chatly-code\concept\09_security_safety.md
+================================================================================
+
+# Security and Safety
+
+## Core Principle
+
+Trust is more important than speed.
+
+The product must make agent behavior visible, reversible and policy-controlled.
+
+## Safety Defaults
+
+- No hidden file changes.
+- No silent destructive commands.
+- No automatic secret upload.
+- No direct modification without checkpoint.
+- No untracked tool action.
+- No dangerous MCP tool without policy.
+
+## Workspace Safety
+
+Before editing:
+
+```text
+1. Check git status.
+2. Warn if worktree is dirty.
+3. Create branch or checkpoint.
+4. Store baseline diff.
+5. Start agent execution.
+```
+
+If project has no git:
+
+```text
+1. Offer to initialize git.
+2. Or create internal backup snapshot.
+3. Warn that rollback is weaker without git.
+```
+
+## Command Risk Levels
+
+Low:
+
+- `git status`;
+- `git diff`;
+- `ls`;
+- `rg`;
+- build/test commands already detected.
+
+Medium:
+
+- package manager commands;
+- scripts from repository;
+- Docker start;
+- network calls.
+
+High:
+
+- recursive delete;
+- force git commands;
+- credential access;
+- chmod/chown recursive;
+- unknown shell pipelines;
+- commands outside workspace.
+
+## Approval UX
+
+Approval dialog should show:
+
+```text
+Command:
+detected project test command
+
+Why:
+Run project tests after code changes.
+
+Risk:
+Low
+
+[Allow once] [Always allow for this project] [Deny]
+```
+
+For high risk:
+
+```text
+High-risk command blocked by default.
+User must explicitly confirm.
+```
+
+## Secrets Policy
+
+Never send by default:
+
+- `.env`;
+- private keys;
+- tokens;
+- credentials;
+- cloud config with secrets;
+- local database dumps.
+
+Use redaction:
+
+```text
+OPENAI_API_KEY=sk-... -> OPENAI_API_KEY=[REDACTED]
+password=... -> password=[REDACTED]
+```
+
+## LLM Context Policy
+
+Before sending context:
+
+- apply ignore rules;
+- apply secret redaction;
+- limit file size;
+- prefer relevant snippets;
+- log what files/snippets were used.
+
+## MCP Policy
+
+MCP tools must have:
+
+- name;
+- source;
+- permissions;
+- risk level;
+- enabled/disabled state;
+- user approval requirements.
+
+MCP calls must be logged.
+
+## Sandbox
+
+MVP:
+
+- local process runtime;
+- git checkpoint;
+- command approval.
+
+Production:
+
+- Docker/Podman sandbox;
+- mounted workspace;
+- resource limits;
+- network policy;
+- environment filtering.
+
+## Rollback
+
+Rollback must support:
+
+- rollback whole task;
+- rollback single file later;
+- discard unaccepted changes;
+- restore checkpoint.
+
+UI must show rollback clearly after every agent task.
+
+## Audit Log
+
+Store:
+
+- task;
+- plan;
+- approvals;
+- commands;
+- file changes;
+- test runs;
+- accepted/rejected decisions.
+
+Enterprise edition can expose exportable audit logs.
+
+
+
+================================================================================
+FILE: concept\10_roadmap.md
+PATH: C:\projects\chatly-code\concept\10_roadmap.md
+================================================================================
+
+# Roadmap
+
+## Phase 0: Product Prototype
+
+Goal: prove UX and project scan value.
+
+Scope:
+
+- JavaFX shell.
+- Open local project.
+- Scan file tree.
+- Detect languages/build tools.
+- Create initial SQLite code graph tables.
+- Index Java files into files/nodes/edges.
+- Show overview.
+- Basic model settings.
+- i18n foundation with English default and Russian locale.
+- basic performance diagnostics for startup, scan time and UI freeze warnings.
+- Basic chat with project context.
+
+Exit criteria:
+
+- user can open a real project;
+- app explains stack and structure;
+- user sees enough value before agent edits code.
+
+## Phase 1: Agent MVP
+
+Goal: safe single-task agent.
+
+Scope:
+
+- task creation;
+- plan generation;
+- approval flow;
+- read/search tools;
+- apply patch tool;
+- shell test command;
+- git checkpoint;
+- diff viewer;
+- rollback.
+
+Exit criteria:
+
+- user can select a task;
+- agent plans;
+- user approves;
+- agent edits;
+- tests run;
+- diff is reviewable;
+- rollback works.
+
+## Phase 2: Project Doctor
+
+Goal: product starts creating value without user writing prompts.
+
+Scope:
+
+- CodeGraph-style graph search/explore;
+- reference resolver for Java imports/packages;
+- Spring framework resolver for controllers/routes/services/repositories;
+- problem detection;
+- task board;
+- bug/risk/improvement/tech debt/feature classification;
+- severity/confidence;
+- affected files;
+- evidence;
+- suggested fixes.
+
+Exit criteria:
+
+- old project produces useful task list;
+- user can distinguish bug from improvement;
+- tasks are actionable.
+
+## Phase 3: Architecture Explorer
+
+Goal: serious differentiation.
+
+Scope:
+
+- C4 generation from code graph evidence;
+- module graph;
+- dependency graph;
+- interactive C4 UI;
+- architecture smells;
+- generated docs/architecture files.
+
+Exit criteria:
+
+- user can understand project architecture visually;
+- C4 node links to files/problems/tasks;
+- generated diagrams are useful enough to keep in repo.
+
+## Phase 4: Strong Runtime
+
+Goal: closer to OpenHands-level agent capabilities.
+
+Scope:
+
+- Docker/Podman sandbox;
+- MCP client;
+- internal MCP server exposing code graph tools;
+- task queue;
+- multi-step recovery;
+- richer tools;
+- local memory;
+- model profiles by task type.
+- virtual-thread based IO runtime with bounded CPU parse workers.
+
+Exit criteria:
+
+- agent can handle larger tasks safely;
+- runtime can isolate risky execution;
+- MCP tools extend capabilities.
+- graph context reduces manual file reads.
+- multi-agent execution respects concurrency limits and file-write serialization.
+
+## Phase 5: Commercial Desktop
+
+Goal: production-ready paid product.
+
+Scope:
+
+- installer;
+- signed builds;
+- background updates;
+- crash reporting optional;
+- license system;
+- onboarding;
+- docs;
+- polished settings;
+- complete English/Russian UI localization;
+- performance budget validation;
+- release channels.
+
+Exit criteria:
+
+- users can install/update without developer setup;
+- app feels reliable;
+- payment/licensing path exists.
+
+## Phase 6: Team / Enterprise
+
+Scope:
+
+- shared project rules;
+- policy engine;
+- audit logs;
+- private model gateway;
+- command allowlist;
+- offline activation;
+- team settings import/export.
+
+## Release Strategy
+
+### Alpha
+
+Target: technical users.
+
+Focus:
+
+- project scan;
+- task board;
+- safe agent.
+
+### Beta
+
+Target: early paying users.
+
+Focus:
+
+- C4;
+- better UX;
+- installers;
+- update flow.
+
+### 1.0
+
+Target: serious market.
+
+Must have:
+
+- stable scan;
+- stable agent flow;
+- diff/rollback;
+- tests;
+- C4;
+- installer;
+- updates;
+- English and Russian localization;
+- model settings;
+- performance targets met;
+- documentation.
+
+
+
+================================================================================
+FILE: concept\11_engineering_principles.md
+PATH: C:\projects\chatly-code\concept\11_engineering_principles.md
+================================================================================
+
+# Engineering Principles
+
+## Product Engineering Values
+
+- Trust over magic.
+- Visibility over hidden automation.
+- Small safe changes over huge risky diffs.
+- Project understanding before code generation.
+- Local-first by default.
+- Architecture quality as a first-class feature.
+
+## Code Architecture
+
+- JavaFX controllers must be thin.
+- Business logic belongs in Spring services.
+- Persistence belongs in repositories.
+- Domain model should not depend on UI.
+- Agent tools must be explicit classes.
+- File edits must go through controlled patch APIs.
+- Events should be durable and observable.
+- Code structure must be derived from AST/static analysis before LLM summarization.
+- Graph edges must record provenance and confidence.
+- Use package-by-domain and explicit subdomains, not god modules.
+- Keep high cohesion inside each domain and low coupling between domains.
+- Keep language-specific analysis behind plugin SPI/adapters.
+- Generic core must not import Java/Spring/Rust/TypeScript plugin implementation classes.
+
+## Java Practices
+
+- Use Java 25 features where they improve clarity.
+- Use records for immutable data carriers.
+- Use sealed classes/interfaces for limited hierarchies.
+- Use pattern matching and switch expressions when readable.
+- Use virtual threads for IO-heavy workloads.
+- Use structured concurrency carefully and behind abstraction while preview status matters.
+- Use JSpecify annotations and static analysis for null-safety.
+
+## Spring Practices
+
+- Constructor injection only.
+- Services should express use cases.
+- Keep controllers/adapters thin.
+- Separate domain services from infrastructure services.
+- Do not leak persistence entities into UI models.
+- Use transactions only where needed.
+- Use MapStruct for DTO/entity/domain/ViewModel mappings when mapping is non-trivial or repeated.
+- Prefer Spring Boot auto-configuration and Spring Framework facilities over custom infrastructure.
+- Use Spring Data JPA/Hibernate for normal product/domain persistence.
+- Use Spring JDBC/JdbcClient for high-volume graph indexing tables where JPA overhead is not appropriate.
+- Use Liquibase with XML changelogs for schema migrations.
+- Use Gradle as the mandatory build system for the product.
+- Use `@ConfigurationProperties` for typed configuration.
+- Use `ApplicationEventPublisher` for normal application events unless a high-volume stream requires a focused implementation.
+- Use Micrometer for metrics and SLF4J/Logback for logging.
+
+## JavaFX Practices
+
+- Never block JavaFX Application Thread.
+- Use background services for scans, tools, model calls and test runs.
+- UI state should be modelled through ViewModels.
+- UI should subscribe to domain events.
+- Long operations must show progress and cancellation.
+- UI text must be loaded through localization keys, never hardcoded.
+
+## Agent Practices
+
+- No edit without plan.
+- No edit without checkpoint.
+- No hidden commands.
+- No repeating failed actions endlessly.
+- Always summarize result.
+- Always show tests if available.
+- Always show diff.
+
+## Testing Strategy
+
+Unit tests:
+
+- domain model;
+- task manager;
+- problem classification;
+- command policy;
+- diff parser;
+- tool runtime.
+
+Integration tests:
+
+- project scan;
+- code graph indexing;
+- reference resolution;
+- graph queries;
+- git checkpoint/rollback;
+- agent tool execution;
+- SQLite persistence.
+
+UI tests:
+
+- open project;
+- task flow;
+- approve plan;
+- review diff;
+- rollback.
+
+## Quality Gates
+
+Before release:
+
+- app starts cleanly;
+- project scan works on sample repos;
+- no UI freeze during scan;
+- rollback works;
+- update flow tested;
+- secrets redaction tested;
+- installer tested on target OS.
+
+## Documentation Rules
+
+Generated architecture docs should be useful outside the app:
+
+- Markdown;
+- Mermaid;
+- clear file links;
+- timestamp/version;
+- note that docs are generated.
+
+## Localization Rules
+
+- English is the default language.
+- Russian is a required built-in locale.
+- All UI text must use Spring `MessageSource` with resource bundles.
+- Use `LocaleContextHolder` or an equivalent Spring locale context pattern where locale is needed outside the UI.
+- Resource bundles must include `messages.properties`, `messages_en.properties` and `messages_ru.properties`.
+- Do not concatenate translated UI strings from fragments when grammar can differ by language.
+- Prefer parameterized messages.
+- Test screens with Russian text because labels are often longer than English.
+- Agent prompts can remain English internally, but user-facing explanations should follow selected language.
+
+## Dependency Rules
+
+- Do not add libraries without clear benefit.
+- Prefer mature libraries for diff, git, markdown, SQLite and installers.
+- Prefer deterministic parsers/static analysis for code structure.
+- Use Spring AI Agent Utils as the default foundation for coding-agent file, shell, grep/glob, todo, skills, memory and subagent tools.
+- Keep AI provider integration behind `llm-gateway`.
+- Keep Docker/MCP behind interfaces.
+- Do not write custom replacements for DI, ORM, migrations, i18n, logging, metrics, validation, mapping or generic HTTP clients when Spring/JVM ecosystem tools cover the need.
+- Do not write coding-agent tools from scratch if Spring AI Agent Utils already provides the capability; wrap it with Chatly Code safety, sandbox, event and UI policies.
+
+## Performance Rules
+
+- The JavaFX Application Thread must never run indexing, LLM calls, shell commands, graph queries or file parsing.
+- Use virtual threads for IO-heavy concurrent operations.
+- Use bounded executors for CPU-heavy parsing and graph work.
+- Use backpressure for agent events and tool queues.
+- Use streaming UI updates for long-running tasks.
+- Use memory limits and batching when indexing large projects.
+- Evaluate GraalVM and native-image only where compatibility with JavaFX, Spring Boot, SQLite, tree-sitter and MCP runtime is proven.
+- Prefer fast startup and low idle memory for desktop UX.
+
+## Code Graph Rules
+
+- Store files, nodes, edges and unresolved references locally in SQLite.
+- Run extraction before LLM analysis.
+- Run resolver after extraction.
+- Keep unresolved references visible.
+- Prefer no edge over wrong edge.
+- Framework-aware edges must include provenance.
+- Keep graph fresh with content hash and watcher sync.
+- Context builder must return bounded, sufficient context for the agent.
+- Port CodeGraph's pipeline to Java instead of inventing a new graph architecture without reason.
+- Use MapStruct for mapping graph database rows to domain models and UI DTOs where hand-written mapping would become repetitive.
+- Implement Java/Spring, Rust and TypeScript-specific analysis as language plugins behind stable core SPI.
+- Language plugins must be extractable into separate libraries later.
+
+## Stack Narrative Rules
+
+- The stack should be market-relevant and defensible for public technical review.
+- Custom code must be concentrated in product-specific value: code graph, agent orchestration, C4, workspace safety and UX.
+- Infrastructure should be boring and standard: Spring, Hibernate/JPA, Spring JDBC, Liquibase XML, Lombok, MapStruct, Micrometer, SLF4J.
+- If a custom solution is proposed, document why the standard Spring/JVM option is insufficient.
+
+
+
+================================================================================
+FILE: concept\12_updates_distribution.md
+PATH: C:\projects\chatly-code\concept\12_updates_distribution.md
+================================================================================
+
+# Updates and Distribution
+
+## Goal
+
+Commercial desktop product must install and update like normal professional software.
+
+User should not run Gradle commands, unpack zips or manually replace files.
+
+## Packaging Strategy
+
+Use:
+
+- `jpackage` for Java runtime image/package foundation.
+- `install4j` for professional installer, signing, shortcuts, uninstall and updates.
+
+Optional:
+
+- evaluate `jDeploy` for simpler distribution channels, but do not depend on it for the main commercial updater until proven.
+
+## Installer Requirements
+
+Installer should:
+
+- install bundled Java runtime;
+- create desktop/start menu shortcuts;
+- register uninstall;
+- support per-user install;
+- support system install later;
+- preserve user settings on update;
+- support code signing.
+
+## Update Flow
+
+Background flow:
+
+```text
+1. App checks update metadata.
+2. If update exists, app downloads in background.
+3. App verifies signature/hash.
+4. App shows non-blocking notification:
+   "Update ready. Restart to install?"
+5. User clicks restart.
+6. App closes.
+7. Updater installs.
+8. App reopens.
+```
+
+UI states:
+
+```text
+Up to date
+Checking
+Downloading 42%
+Update ready
+Update failed
+Restart required
+```
+
+## Release Channels
+
+- stable;
+- beta;
+- internal/nightly.
+
+Settings:
+
+```text
+Update channel: Stable / Beta
+Check automatically: on/off
+Download automatically: on/off
+Language: English / Русский
+```
+
+## Versioning
+
+Use semantic versioning:
+
+```text
+MAJOR.MINOR.PATCH
+```
+
+Examples:
+
+```text
+0.1.0-alpha
+0.5.0-beta
+1.0.0
+1.1.0
+```
+
+## Update Safety
+
+Before update:
+
+- ensure no active agent task;
+- warn user if task running;
+- save UI state;
+- flush SQLite;
+- close runtime processes cleanly.
+
+## Rollback Strategy
+
+For serious product:
+
+- keep previous version metadata;
+- if update fails, app should remain on old version;
+- never break user projects during app update.
+
+## Signing
+
+Production builds should be signed:
+
+- Windows code signing certificate;
+- macOS notarization later if macOS is targeted;
+- signed update metadata.
+
+## Distribution Checklist
+
+- installer built;
+- installer signed;
+- app starts after clean install;
+- update from previous version tested;
+- uninstall tested;
+- user settings preserved;
+- logs available;
+- crash on startup recovery path exists.
+
+
+
+================================================================================
+FILE: concept\13_code_graph_engine.md
+PATH: C:\projects\chatly-code\concept\13_code_graph_engine.md
+================================================================================
+
+# Code Graph Engine
+
+This document defines the local deterministic code graph layer. The design intentionally follows the CodeGraph approach from `examples/codegraph-main`, adapted to Chatly Code's Java/Spring/JavaFX product architecture.
+
+## Goal
+
+The agent should not discover the project by repeatedly running grep and reading random files. Chatly Code must pre-index the codebase into a local graph and give the agent precise, compact context.
+
+```text
+Without graph:
+agent -> grep -> read -> grep -> read -> maybe understands
+
+With graph:
+agent -> graph query -> focused context -> plan -> safe edit
+```
+
+## Non-Goals
+
+- Do not add a separate analytical database for MVP.
+- Do not use LLM as the source of truth for code structure.
+- Do not build a huge general graph database product.
+- Do not require cloud services for indexing.
+
+## Storage
+
+Use SQLite for the graph, same local-first idea as CodeGraph.
+
+Per-project data can live under:
+
+```text
+.chatly-code/
+  graph.db
+  locks/
+  cache/
+```
+
+The main app database can still store product state. For MVP, both product tables and graph tables may live in one SQLite database if simpler. The important part is a clean schema boundary.
+
+## Pipeline
+
+```text
+Project files
+-> File inventory
+-> Language detection
+-> AST parsing
+-> Node extraction
+-> Edge extraction
+-> Unresolved reference collection
+-> Reference resolution
+-> Framework resolution
+-> Graph queries
+-> Context builder
+-> Agent / C4 / Problems
+```
+
+## Scan-to-Prompt Path
+
+This is the required path from raw source code to an agent prompt. Do not skip steps and do not replace deterministic graph extraction with LLM guessing.
+
+```text
+1. ProjectScanner finds source files and ignores generated/vendor files.
+2. CodeGraphIndexer detects language for each file.
+3. AstExtractor parses source into AST.
+4. NodeExtractor emits CodeNode records.
+5. EdgeExtractor emits direct CodeEdge records.
+6. UnresolvedReferenceCollector stores references that cannot be resolved per-file.
+7. ReferenceResolver resolves imports, packages, aliases and known symbols.
+8. FrameworkResolver adds framework-aware nodes/edges, for example Spring routes.
+9. GraphQueryService answers search/callers/callees/impact/layer queries.
+10. ContextBuilder builds compact model-ready context with source snippets and line numbers.
+11. PromptAssembler combines task, rules, graph context, C4 context, risks and allowed tools.
+12. AgentCore asks the model for a plan or next action.
+```
+
+Prompt assembly must look like this:
+
+```text
+System:
+- product rules
+- project rules
+- tool policy
+
+Task:
+- user/task text
+- acceptance criteria
+- risk level
+
+Project context:
+- detected stack
+- build/test commands
+- git state
+
+Graph context:
+- relevant nodes
+- relevant edges
+- callers/callees
+- impact radius
+- source snippets with line numbers
+- unresolved/stale warnings
+
+Architecture context:
+- related C4 nodes
+- layer boundaries
+- architecture violations
+
+Instruction:
+- first produce a plan
+- do not edit before approval
+- use tools through AgentCore
+```
+
+The graph context should be generated before the model is asked to reason. The model receives evidence; it does not invent the project structure.
+
+## Porting Plan from CodeGraph
+
+Do not invent this pipeline from scratch. Port the proven CodeGraph design from `C:\projects\chatly-code\examples\codegraph-main` into Java and bind it to Chatly Code's desktop workflow.
+
+Use these files as implementation references:
+
+```text
+CodeGraph reference                                           Chatly Code Java target
+----------------------------------------------------------------------------------------------------
+src/index.ts                                                  CodeGraphFacade / ProjectGraphService
+src/types.ts                                                  CodeNode, CodeEdge, CodeFile, NodeKind, EdgeKind
+src/db/schema.sql                                             SQLite graph schema migrations
+src/db/queries.ts                                             CodeGraphRepository / prepared queries
+src/extraction/index.ts                                       CodeGraphIndexer
+src/extraction/tree-sitter.ts                                 TreeSitterAstExtractor
+src/extraction/tree-sitter-types.ts                           LanguageExtractor SPI
+src/extraction/tree-sitter-helpers.ts                         AstNodeHelpers
+src/extraction/generated-detection.ts                         GeneratedFileDetector
+src/extraction/parse-worker.ts                                Bounded parse workers; virtual threads only for IO orchestration
+src/extraction/languages/*.ts                                 Java LanguageExtractor implementations
+src/resolution/index.ts                                       ReferenceResolver
+src/resolution/import-resolver.ts                             ImportResolver / JavaImportResolver
+src/resolution/name-matcher.ts                                NameMatcher
+src/resolution/path-aliases.ts                                BuildPathAliasResolver
+src/resolution/workspace-packages.ts                          WorkspaceModuleResolver
+src/resolution/frameworks/*                                   SpringFrameworkResolver and later Rust resolvers
+src/graph/traversal.ts                                        GraphTraverser
+src/graph/queries.ts                                          GraphQueryService
+src/context/index.ts                                          AgentContextBuilder
+src/context/formatter.ts                                      AgentContextFormatter
+src/mcp/tools.ts                                              Internal graph tools + optional MCP tools
+src/sync/watcher.ts                                           CodeGraphFileWatcher
+src/sync/index.ts                                             GraphSyncService
+```
+
+The Java implementation can use different libraries, but the responsibilities and data flow should stay the same.
+
+## Java Porting Examples
+
+## Language Plugin Boundary
+
+Generic code graph engine must not hardcode Java/Spring, Rust or TypeScript-specific logic.
+
+Use language plugins:
+
+```text
+language-spi
+language-java
+language-rust
+language-typescript
+```
+
+Core graph pipeline calls plugins through interfaces:
+
+```text
+LanguagePlugin
+LanguageExtractor
+ReferenceResolver
+FrameworkResolver
+ProblemRule
+BuildManifestDetector
+TestCommandDetector
+```
+
+Rules:
+
+- `code-graph-engine` owns normalized nodes/edges/files/unresolved references;
+- language plugins own AST/language/framework-specific extraction details;
+- problem-detector runs rules registered by plugins;
+- prompt assembler consumes normalized evidence, not plugin internals;
+- Java/Spring plugin must be removable or extractable without changing graph core;
+- Rust/TypeScript plugins must not depend on Java/Spring plugin.
+
+### Node and Edge records
+
+```java
+public record CodeNode(
+    String id,
+    NodeKind kind,
+    String name,
+    String qualifiedName,
+    Path filePath,
+    String language,
+    int startLine,
+    int endLine,
+    String signature,
+    String docstring,
+    Instant updatedAt
+) {}
+
+public record CodeEdge(
+    String sourceId,
+    String targetId,
+    EdgeKind kind,
+    EdgeProvenance provenance,
+    double confidence,
+    Integer line,
+    String metadataJson
+) {}
+```
+
+### Extraction result
+
+```java
+public record ExtractionResult(
+    List<CodeNode> nodes,
+    List<CodeEdge> edges,
+    List<CodeUnresolvedReference> unresolvedReferences,
+    List<ExtractionError> errors,
+    Duration duration
+) {}
+```
+
+### Language extractor SPI
+
+```java
+public interface LanguageExtractor {
+    String language();
+    boolean supports(Path file, String source);
+    ExtractionResult extract(Path file, String source, AstTree tree);
+}
+```
+
+### Graph context for prompt
+
+```java
+public record AgentGraphContext(
+    String query,
+    List<CodeNode> entryPoints,
+    List<CodeEdge> relevantEdges,
+    List<SourceSnippet> snippets,
+    List<Path> relatedFiles,
+    boolean stale,
+    String confidenceNote
+) {}
+```
+
+This should map directly to prompt sections.
+
+## Core Tables
+
+### code_files
+
+```text
+path
+content_hash
+language
+size
+modified_at
+indexed_at
+node_count
+generated
+test_file
+errors_json
+```
+
+### code_nodes
+
+```text
+id
+kind
+name
+qualified_name
+file_path
+language
+start_line
+end_line
+start_column
+end_column
+docstring
+signature
+visibility
+is_exported
+is_async
+is_static
+is_abstract
+decorators_json
+type_parameters_json
+updated_at
+```
+
+### code_edges
+
+```text
+id
+source_id
+target_id
+kind
+metadata_json
+line
+column
+provenance
+confidence
+```
+
+### code_unresolved_refs
+
+```text
+id
+from_node_id
+reference_name
+reference_kind
+file_path
+language
+line
+column
+candidates_json
+```
+
+### code_graph_metadata
+
+```text
+key
+value
+updated_at
+```
+
+## Node Kinds
+
+Use a controlled list:
+
+```text
+file
+module
+package
+namespace
+class
+interface
+enum
+enum_member
+record
+annotation
+function
+method
+constructor
+property
+field
+variable
+constant
+parameter
+import
+export
+route
+component
+database_table
+external_service
+```
+
+## Edge Kinds
+
+Use a controlled list:
+
+```text
+contains
+imports
+exports
+calls
+references
+extends
+implements
+type_of
+returns
+instantiates
+overrides
+decorates
+handles_route
+reads_from
+writes_to
+publishes
+subscribes
+configured_by
+tests
+```
+
+## Provenance
+
+Every edge must say how it was created:
+
+```text
+tree_sitter
+language_resolver
+framework_resolver
+build_manifest
+heuristic
+user_confirmed
+```
+
+Heuristic edges must have lower confidence and visible metadata.
+
+## Extraction Layer
+
+Responsibilities:
+
+- parse source files;
+- create file node;
+- create package/namespace nodes;
+- create declarations;
+- create containment edges;
+- collect direct calls/references when possible;
+- collect unresolved references when target is unknown during per-file extraction.
+
+Implementation notes:
+
+- Java first-class support is required.
+- Rust support should be planned early.
+- Generated files should be detected and deprioritized.
+- Test files should be marked.
+- Parsing must run off the JavaFX thread.
+- Large files need limits and error recording.
+
+## Reference Resolver
+
+Runs after extraction.
+
+Responsibilities:
+
+- resolve imports;
+- resolve package names;
+- resolve Java classes where file name and class name differ;
+- resolve static imports;
+- resolve method references where possible;
+- resolve build/workspace aliases;
+- resolve framework-specific links.
+
+Important rule:
+
+It is better to leave a reference unresolved than to create a confident but wrong edge.
+
+## Framework Resolvers
+
+Framework resolvers add higher-level links.
+
+Java/Spring examples:
+
+```text
+@RestController -> route/component node
+@GetMapping/@PostMapping -> route node
+route -> controller method edge
+controller method -> service calls
+repository interface -> database access component
+@Service/@Component/@Repository -> component classification
+@Autowired/constructor injection -> dependency edge
+@Entity -> persistence entity classification
+DTO naming/usage -> DTO classification
+@Configuration/@Bean -> configuration node/component
+@KafkaListener -> message consumer node
+@Scheduled -> scheduled job node
+@FeignClient -> external client node
+RestClient/WebClient usage -> external HTTP client edge
+```
+
+Rust examples later:
+
+```text
+Cargo workspace member -> module/container
+axum route -> handler
+actix route -> handler
+trait impl -> implements edge
+```
+
+## Graph Queries
+
+Required MVP queries:
+
+```text
+searchSymbols(query)
+getNode(id)
+getNodeContext(id)
+getCallers(id)
+getCallees(id)
+getFileDependencies(path)
+getFileDependents(path)
+getImpactRadius(id, depth)
+findCircularDependencies()
+findLayerViolations()
+findRoutes()
+findTestsForNode(id)
+```
+
+## Context Builder
+
+The context builder converts graph query results into model-ready context.
+
+Responsibilities:
+
+- find relevant symbols from task text;
+- expand graph around entry points;
+- include source snippets with line numbers;
+- include callers/callees;
+- include related files;
+- keep output bounded;
+- mark low-confidence results honestly;
+- avoid telling agent to read files unless graph is stale or insufficient.
+
+Design target:
+
+```text
+One graph context call should answer most "where is this implemented?" questions.
+```
+
+## Freshness and Sync
+
+Use CodeGraph-style freshness:
+
+- content hash for indexed files;
+- file watcher;
+- debounce sync;
+- connect-time catch-up;
+- stale-file banner when a referenced file has pending changes;
+- manual resync command.
+
+Agent must know if graph context may be stale.
+
+## MCP Surface
+
+Expose graph tools to the internal agent and optionally external MCP clients:
+
+```text
+chatly_graph_status
+chatly_graph_search
+chatly_graph_node
+chatly_graph_explore
+chatly_graph_callers
+chatly_graph_callees
+chatly_graph_impact
+chatly_graph_routes
+chatly_graph_layer_violations
+```
+
+The primary tool should be an `explore`-style tool that returns enough code and relationships for the agent to stop searching manually.
+
+## C4 Integration
+
+C4 should be built from graph facts:
+
+```text
+routes + controllers + services + repositories + external clients
+-> components
+packages/modules/build manifests
+-> containers
+dependencies and framework edges
+-> relationships
+```
+
+LLM can improve descriptions, but graph evidence controls structure.
+
+## Problem Detection Integration
+
+Problem detector should query the graph:
+
+```text
+controllers importing repositories
+entities exposed to API/UI DTO boundaries
+services depending on UI
+repositories calling services
+cycles between modules
+god classes by method/edge count
+huge classes by line/member count
+huge methods by line/complexity threshold
+public methods with no callers
+routes without tests
+high blast-radius files
+too many dependencies from one class/module
+```
+
+## Success Criteria
+
+- Index is local and deterministic.
+- Agent uses graph context before file reading.
+- Graph answers reduce tool calls.
+- C4 diagrams are traceable to source files.
+- Problems include evidence from nodes/edges.
+- Incremental sync keeps graph fresh.
+
+
+
+================================================================================
+FILE: concept\14_performance_targets.md
+PATH: C:\projects\chatly-code\concept\14_performance_targets.md
+================================================================================
+
+# Performance Targets
+
+## Goal
+
+Chatly Code must feel like a serious desktop engineering tool: fast startup, responsive UI, predictable memory use, and strong multi-agent throughput without freezing the machine.
+
+Performance is a product feature. If the app feels heavy, users will not trust it with large legacy projects.
+
+## Runtime Strategy
+
+Use:
+
+- Java 25 LTS;
+- Virtual Threads for IO-heavy concurrency;
+- Structured Concurrency where stable enough and hidden behind abstractions;
+- bounded platform-thread pools for CPU-heavy parsing;
+- Spring Boot lazy initialization where it improves desktop startup;
+- JavaFX background services for long tasks;
+- SQLite prepared statements and transactions;
+- streaming LLM responses;
+- incremental graph indexing.
+
+## GraalVM Strategy
+
+GraalVM must be part of the performance plan, but not blindly forced into fragile packaging.
+
+Use GraalVM for:
+
+- a serious JDK/runtime candidate for production builds;
+- benchmarking startup and memory;
+- evaluating native-image feasibility;
+- testing packaging options;
+- possible CLI/helper binaries later.
+
+Native image must be evaluated carefully because the app uses:
+
+- JavaFX;
+- Spring Boot;
+- Spring AI;
+- SQLite;
+- tree-sitter/native or WASM parsing;
+- MCP;
+- dynamic model/provider integrations.
+
+Decision rule:
+
+```text
+Use GraalVM JDK/runtime when it improves the production build and remains supportable.
+Use GraalVM native-image if it improves startup/memory without breaking JavaFX/Spring/SQLite/tree-sitter packaging.
+If native-image creates fragile build/runtime complexity, ship JVM runtime through jpackage/install4j first and keep native-image as an optimization track.
+```
+
+## Startup Targets
+
+Cold start target:
+
+```text
+App window visible: <= 3 seconds on developer laptop
+Interactive shell ready: <= 5 seconds
+Recent projects loaded: <= 1 second after window visible
+```
+
+Startup rules:
+
+- show UI before loading heavy services;
+- defer model provider checks;
+- defer project graph opening until project is selected;
+- lazy-load MCP integrations;
+- lazy-load tree-sitter grammars by language;
+- do not block JavaFX Application Thread.
+
+## UI Responsiveness
+
+Targets:
+
+```text
+UI frame should not freeze over 100 ms during normal interaction.
+Long tasks must show progress within 300 ms.
+Cancellation should be visible within 1 second.
+```
+
+Rules:
+
+- no indexing on UI thread;
+- no database scans on UI thread;
+- no LLM calls on UI thread;
+- no shell command waiting on UI thread;
+- batch UI events;
+- collapse noisy agent/tool logs;
+- virtualize long lists and logs.
+
+## Project Scan Targets
+
+For a medium project:
+
+```text
+Initial file inventory: <= 5 seconds
+Basic overview: <= 15 seconds
+Usable graph context: <= 60 seconds
+Full deep analysis: background task
+```
+
+The app should show partial results. User should not wait for full indexing before seeing value.
+
+## Code Graph Performance
+
+Use CodeGraph-inspired indexing:
+
+```text
+files -> AST extraction -> SQLite nodes/edges -> resolver -> graph queries
+```
+
+Rules:
+
+- content-hash every indexed file;
+- skip unchanged files;
+- debounce watcher updates;
+- index in batches;
+- wrap batch writes in transactions;
+- use prepared statements;
+- add indexes for node kind, name, qualified name, file path, edge source/kind and target/kind;
+- keep unresolved references visible;
+- use FTS for symbol search if SQLite FTS is available;
+- compact/vacuum only when needed and never during active user work.
+
+## Virtual Threads
+
+Use virtual threads for:
+
+- file IO;
+- shell process waiting;
+- LLM HTTP calls;
+- MCP calls;
+- git command execution;
+- Docker API calls;
+- background sync tasks.
+
+Do not use virtual threads as a magic answer for CPU-bound parsing. Parsing should use bounded CPU executors.
+
+## Multi-Agent Runtime
+
+Multi-agent must be controlled, not chaotic.
+
+Agent roles:
+
+- ArchitectAgent;
+- PlannerAgent;
+- ImplementerAgent;
+- ReviewerAgent;
+- TestAgent;
+- SecurityAgent.
+
+Execution model:
+
+```text
+Coordinator
+-> creates sub-agent tasks
+-> assigns isolated context
+-> enforces tool permissions
+-> merges results
+-> prevents conflicting file edits
+```
+
+Rules:
+
+- one writer per file at a time;
+- sub-agents can read in parallel;
+- edits are serialized through WorkspaceSafety;
+- each sub-agent has budget limits;
+- each sub-agent emits events;
+- Coordinator owns final plan and final diff;
+- failed sub-agent result must not poison the whole task silently.
+
+## Concurrency Limits
+
+Default limits:
+
+```text
+CPU parse workers: min(availableProcessors, 8)
+Concurrent LLM calls: 2 by default
+Concurrent shell commands: 1 per task
+Concurrent git operations: 1 per project
+Concurrent file writers: 1 per project
+Concurrent graph reads: many, bounded by SQLite mode
+```
+
+These must be configurable for power users later.
+
+## Memory Targets
+
+Idle app:
+
+```text
+Target: <= 400 MB after startup
+Stretch: <= 250 MB
+```
+
+Medium project after indexing:
+
+```text
+Target: <= 1.2 GB
+```
+
+Rules:
+
+- do not keep full project source in memory;
+- store graph in SQLite;
+- stream large files;
+- cap source snippets;
+- release AST trees immediately;
+- bound caches with LRU;
+- separate UI log retention from persisted event history.
+
+## Agent Event Throughput
+
+Agent events can be noisy. UI must remain readable and fast.
+
+Rules:
+
+- persist full event log;
+- render summarized event groups by default;
+- collapse repeated tool actions;
+- stream terminal output with line limits;
+- keep full logs on disk if needed;
+- avoid appending unlimited text nodes to JavaFX UI controls.
+
+## LLM Performance
+
+Rules:
+
+- use graph context before raw file context;
+- keep prompt context bounded;
+- reuse project summaries;
+- cache stable project facts;
+- stream model output;
+- track token usage;
+- use smaller/faster model profiles for classification and larger models for planning/implementation when needed.
+
+## Database Performance
+
+SQLite rules:
+
+- use WAL mode where safe;
+- use prepared statements;
+- use transactions for batch graph writes;
+- keep app state and graph schema separated logically;
+- create indexes intentionally;
+- avoid long write transactions while UI needs reads;
+- use migrations from day one.
+
+## Observability
+
+Local diagnostics:
+
+- scan duration;
+- indexing files/sec;
+- graph node/edge counts;
+- LLM latency;
+- tool latency;
+- memory usage;
+- queue depth;
+- UI freeze warnings;
+- failed command count.
+
+Diagnostics must be local-first. External telemetry must be optional.
+
+## Performance Definition of Done
+
+A feature is not done if:
+
+- it freezes UI;
+- it performs unbounded file reads;
+- it creates unbounded memory growth;
+- it spawns unlimited agents/tasks;
+- it makes graph sync stale without warning;
+- it has no cancellation path for long work.
+
+
+
+================================================================================
+FILE: concept\15_technology_decisions.md
+PATH: C:\projects\chatly-code\concept\15_technology_decisions.md
+================================================================================
+
+# Technology Decisions
+
+## Goal
+
+Chatly Code should be built as a serious corporate-grade JVM desktop product. The stack must be relevant on the job market and must teach production practices, not custom framework writing.
+
+Rule:
+
+```text
+Use Spring/JVM ecosystem capabilities first.
+Write custom infrastructure only when the framework does not provide the needed behavior or when performance/security requires a focused implementation.
+```
+
+## Core Stack
+
+Required stack:
+
+- Java 25 LTS.
+- Spring Boot 4.
+- Spring Framework 7.
+- Spring AI 2.x or latest stable Spring AI at implementation time.
+- JavaFX 26.
+- Gradle as the mandatory build system.
+- GraalVM JDK as a serious build/runtime option.
+- Virtual Threads for IO-heavy work.
+- JSpecify null-safety.
+- SQLite.
+- Tree-sitter or equivalent AST extraction.
+- Spring AI Agent Utils as the default foundation for coding-agent tools and subagent orchestration.
+- Docker/Podman.
+- MCP.
+- jpackage + install4j.
+
+## Spring-First Defaults
+
+## Coding Agent Library Decision
+
+Do not implement the coding-agent tool layer from scratch.
+
+Use `spring-ai-agent-utils` from:
+
+```text
+C:\projects\chatly-code\examples\spring-ai-agent-utils-main
+```
+
+as the default foundation for Spring AI based coding-agent capabilities.
+
+The library provides useful building blocks:
+
+- file system tools;
+- shell tools;
+- grep/search tools;
+- glob tools;
+- todo/task tools;
+- skills;
+- subagent framework;
+- memory tools;
+- A2A subagent integration.
+
+Rules:
+
+- prefer the library's existing tools before writing our own;
+- wrap library tools with Chatly Code policy, approvals, logging and workspace safety;
+- route file edits through `workspace-safety`;
+- route shell execution through runtime/sandbox policy;
+- connect library tool calls to our action/observation event model;
+- connect library subagents to our multi-agent coordinator;
+- keep code graph, C4, problem detection, UX and review workflow as Chatly Code product value.
+
+Allowed custom code:
+
+- adapters around library tools;
+- approval and command policy;
+- runtime/sandbox integration;
+- graph-aware context injection;
+- UI event streaming;
+- diff/review/rollback;
+- project-specific task classification.
+
+Only write a replacement for a library tool if:
+
+- the library cannot satisfy a required safety or UX constraint;
+- performance is insufficient and measured;
+- the required behavior is specific to Chatly Code's code graph or review workflow.
+
+## Product Build vs User Project Build
+
+Gradle is mandatory for building Chatly Code itself.
+
+User projects are different. The opened project can use any ecosystem:
+
+- Rust with Cargo;
+- Node.js with npm, pnpm or yarn;
+- Python with pytest, uv, poetry or tox;
+- Go with `go test`;
+- Java with Gradle or Maven;
+- .NET with `dotnet test`;
+- Makefile-based workflows;
+- custom scripts.
+
+Chatly Code must detect and store project-specific build/test commands instead of assuming Gradle.
+
+Rules:
+
+- never assume the user project uses Gradle;
+- detect build manifests and scripts;
+- present detected commands to the user;
+- require approval before running risky commands;
+- remember approved safe commands per project;
+- show command output in the UI;
+- include command result in the final task review.
+
+Use Spring for:
+
+- dependency injection;
+- configuration;
+- profiles;
+- lifecycle;
+- events;
+- validation;
+- i18n;
+- task execution;
+- scheduling;
+- resource loading;
+- HTTP clients;
+- observability integration.
+
+Do not write custom replacements for:
+
+- DI container;
+- event bus, unless Spring events are proven insufficient;
+- configuration registry;
+- i18n registry;
+- validation framework;
+- migration runner;
+- logging facade;
+- metrics facade.
+
+## Persistence Decision
+
+Use one local SQLite database family, but choose access style by workload.
+
+### Product/domain state
+
+Use:
+
+- Spring Data JPA;
+- Hibernate;
+- transactions;
+- repositories;
+- Liquibase XML migrations.
+
+Good for:
+
+- projects;
+- settings;
+- tasks;
+- conversations;
+- tool events;
+- model profiles;
+- update state;
+- user preferences.
+
+### Code graph high-volume data
+
+Use:
+
+- Spring JDBC/JdbcClient;
+- prepared statements;
+- batch inserts;
+- explicit transactions;
+- Liquibase XML migrations.
+
+Reason:
+
+Graph indexing writes many rows quickly. For `code_nodes`, `code_edges`, `code_files`, and `code_unresolved_refs`, JPA/Hibernate can be too heavy. This is not "custom persistence"; it is standard Spring JDBC for a performance-sensitive workload.
+
+## Migrations
+
+Use Liquibase with XML changelogs by default.
+
+Rules:
+
+- every schema change is a migration;
+- no manual schema mutation in application code;
+- migrations are tested;
+- graph schema and product schema can be separate migration locations.
+- changelog files live in predictable locations, for example:
+  - `db/changelog/product/db.changelog-master.xml`;
+  - `db/changelog/code-graph/db.changelog-master.xml`;
+- changesets must have stable ids and authors;
+- destructive changes require explicit rollback strategy;
+- startup must fail fast when migrations fail.
+
+## Mapping
+
+Use MapStruct for:
+
+- Entity -> DTO;
+- Entity -> ViewModel DTO;
+- database row model -> domain model when repetitive;
+- API/settings DTOs.
+
+Use manual mapping only when:
+
+- mapping is one-off and trivial;
+- mapping needs custom logic that MapStruct would hide;
+- performance requires hand-tuned mapping in a hot path.
+
+## Lombok
+
+Use Lombok for Java boilerplate reduction:
+
+- `@Getter`;
+- `@Setter` only when mutability is intended;
+- `@RequiredArgsConstructor`;
+- `@Builder`;
+- `@Slf4j`;
+- `@Value` where appropriate.
+
+Avoid:
+
+- careless `@Data` on JPA entities;
+- Lombok annotations that hide important domain behavior;
+- generated `equals/hashCode` on lazy/cyclic entity graphs without explicit design.
+
+## Validation
+
+Use:
+
+- Jakarta Bean Validation;
+- Spring validation integration;
+- custom validators only for real domain rules.
+
+Validation should exist at boundaries:
+
+- settings forms;
+- model profile forms;
+- task creation;
+- tool configuration;
+- MCP configuration;
+- update channel configuration.
+
+## Events and Async
+
+Use Spring mechanisms first:
+
+- `ApplicationEventPublisher` for domain/application events where appropriate;
+- Spring `TaskExecutor` backed by virtual threads for IO workloads;
+- bounded executors for CPU workloads;
+- `@Scheduled` or Spring scheduling for background checks where appropriate.
+
+For high-volume agent event streaming, a focused internal event stream may be justified, but it must still integrate cleanly with Spring lifecycle and observability.
+
+## Observability
+
+Use:
+
+- Micrometer for metrics;
+- SLF4J + Logback for logs;
+- structured log fields where useful;
+- local diagnostics by default.
+
+Optional external telemetry must be opt-in.
+
+## HTTP and AI Integration
+
+Use:
+
+- Spring AI for model abstraction;
+- Spring `RestClient`/`WebClient` depending on integration needs;
+- Spring configuration properties for provider settings.
+
+Do not spread raw HTTP model calls across the codebase. All model access goes through `llm-gateway`.
+
+## Configuration
+
+Use:
+
+- `@ConfigurationProperties`;
+- typed settings classes;
+- validation annotations;
+- profiles for dev/test/prod packaging.
+
+Do not use stringly-typed global maps for core settings.
+
+## Caching
+
+Use Spring Cache abstraction where useful.
+
+Recommended cache implementation:
+
+- Caffeine for in-memory bounded caches.
+
+Rules:
+
+- caches must be bounded;
+- cache invalidation must be tied to project scan/sync state;
+- no unbounded source-file cache.
+
+## Testing Stack
+
+Use:
+
+- JUnit 5;
+- AssertJ;
+- Mockito where appropriate;
+- Testcontainers where Docker integration needs real containers;
+- Spring Boot test slices where useful;
+- JavaFX UI test framework to be selected after prototype validation.
+
+## Anti-Bicycle Rules
+
+Do not custom-write:
+
+- ORM;
+- DI;
+- migration runner;
+- i18n system;
+- logging facade;
+- metrics framework;
+- generic mapper framework;
+- generic HTTP client abstraction;
+- custom JSON library.
+
+Allowed custom code:
+
+- code graph extraction/resolution;
+- agent orchestration;
+- prompt assembly;
+- workspace safety;
+- C4 generation from graph evidence;
+- UI components specific to the product.
+
+## Public Technical Narrative
+
+If this project is described publicly, the technical story should be defensible:
+
+```text
+We use standard Spring Boot/Spring Framework infrastructure for application concerns.
+We use Hibernate/JPA where it fits normal domain persistence.
+We use Spring JDBC for the high-volume code graph because graph indexing is a write-heavy workload.
+We use MapStruct/Lombok/Liquibase XML/Micrometer instead of custom boilerplate frameworks.
+The custom part is the product's core value: code graph, agent orchestration, safe edits, C4 and UX.
+```
+
+
+
+================================================================================
+FILE: concept\16_implementation_blueprint.md
+PATH: C:\projects\chatly-code\concept\16_implementation_blueprint.md
+================================================================================
+
+# Implementation Blueprint
+
+## Purpose
+
+This file turns the product concept into an implementation-ready blueprint. It exists so an AI coding agent can build the desktop product in controlled slices instead of inventing architecture during coding.
+
+The implementation must be boring where infrastructure is boring and strong where the product creates value.
+
+Core rule:
+
+```text
+Use Spring/JVM ecosystem first. Write custom code only for product-specific value.
+```
+
+## Non-Negotiable Stack
+
+- Java 25 LTS.
+- Spring Boot 4.
+- Spring Framework 7.
+- Spring AI 2.x or latest stable compatible version.
+- JavaFX 26.
+- Gradle as the mandatory build system.
+- GraalVM JDK as build/runtime option.
+- SQLite.
+- Liquibase XML migrations.
+- Spring Data JPA + Hibernate for normal domain persistence.
+- Spring JDBC/JdbcClient for high-volume code graph tables.
+- Spring AI Agent Utils for coding-agent tools, skills and subagent orchestration.
+- Lombok.
+- MapStruct.
+- JSpecify.
+- Micrometer.
+- SLF4J/Logback.
+- Docker/Podman integration behind an interface.
+- MCP integration behind an interface.
+- jpackage + install4j for distribution.
+
+Do not introduce Kotlin.
+Do not introduce DuckDB.
+Do not introduce Flyway.
+Do not introduce Maven.
+
+The Maven restriction applies to Chatly Code's own build. User projects may use Maven, Cargo, npm, pnpm, yarn, pytest, Go, Makefile or any other build/test workflow. The product must detect and run the target project's own commands through the command policy.
+
+## Coding Agent Foundation
+
+Do not build the coding-agent tool stack from scratch.
+
+Use the library from:
+
+```text
+C:\projects\chatly-code\examples\spring-ai-agent-utils-main
+```
+
+as the first-choice implementation base for:
+
+- file read/write/edit tools;
+- shell command execution tools;
+- grep/search and glob tools;
+- todo/task tracking;
+- skills;
+- subagents;
+- memory;
+- A2A remote subagent integration.
+
+Chatly Code should integrate these tools through adapters:
+
+```text
+Spring AI Agent Utils tool
+-> Chatly policy wrapper
+-> WorkspaceSafety / RuntimeService / EventStore
+-> action/observation event
+-> JavaFX UI
+```
+
+Do not call library tools directly from UI controllers.
+Do not bypass Chatly Code approval, sandbox, logging, diff or rollback policy.
+
+## Repository Layout
+
+Recommended top-level modules:
+
+```text
+chatly-code/
+  app-desktop/              JavaFX application shell
+  app-server/               Spring Boot UI-facing application backend
+  agent-server/             agent execution boundary
+  app-backend/              Spring Boot local backend
+  domain/                   domain model and use cases
+  persistence/              JPA, JDBC, SQLite, Liquibase
+  code-graph/               AST extraction, graph indexing, resolver, context builder
+  language-spi/             stable language plugin contracts
+  language-java/            Java/Spring analyzer plugin
+  language-rust/            Rust analyzer plugin
+  language-typescript/      TypeScript/JavaScript analyzer plugin
+  agent-runtime/            agent loop, tools, plan, execution, events
+  sandbox-service/          process/docker/remote runtime lifecycle
+  runtime-service/          command execution, terminal streams, command observations
+  conversation-service/     durable conversation and trajectory history
+  git-service/              status, changed files, diff, checkpoint, commit, rollback
+  llm-gateway/              Spring AI based provider abstraction
+  workspace-safety/         git checkpoints, patching, rollback, command policy
+  c4-generator/             C4 model and Mermaid generation from graph evidence
+  mcp-integration/          MCP client/server integration
+  docker-integration/       Docker/Podman adapters
+  shared-kernel/            shared value objects, errors, ids, time, events
+  test-fixtures/            sample projects and test utilities
+```
+
+If the first prototype is a single Gradle build with fewer modules, keep the same package boundaries from day one.
+
+## Package Rules
+
+Use package names that express ownership:
+
+```text
+com.chatlycode.desktop
+com.chatlycode.project
+com.chatlycode.task
+com.chatlycode.agent
+com.chatlycode.agent.tool
+com.chatlycode.llm
+com.chatlycode.graph
+com.chatlycode.graph.extract
+com.chatlycode.graph.resolve
+com.chatlycode.graph.context
+com.chatlycode.workspace
+com.chatlycode.c4
+com.chatlycode.persistence
+com.chatlycode.i18n
+com.chatlycode.update
+```
+
+Avoid generic root packages like `service`, `manager`, `utils`, `common` unless the class has no better domain owner.
+
+## Domain And Plugin Boundaries
+
+Implementation must follow `20_domain_boundaries_and_language_plugins.md`.
+
+Rules:
+
+- use package-by-domain;
+- keep domain/application/adapters separate;
+- do not create god services;
+- do not create god files;
+- keep UI controllers thin;
+- keep language-specific logic out of generic core;
+- Java/Spring, Rust and TypeScript logic must live in language plugins;
+- plugins depend on stable SPI and normalized graph contracts;
+- core does not depend on plugin internals;
+- every language plugin should be extractable as a separate library later.
+
+Bad:
+
+```text
+GraphQueryService imports SpringFrameworkResolver
+ProblemDetector imports JavaControllerRule directly
+AgentPromptAssembler scans Java annotations manually
+```
+
+Good:
+
+```text
+LanguagePluginRegistry loads JavaLanguagePlugin
+ProblemDetector runs registered ProblemRule instances
+PromptAssembler consumes normalized graph/problem/task evidence
+```
+
+## First Vertical Slice
+
+Build the first usable slice before adding broad features.
+
+The first slice:
+
+```text
+Open local project
+-> scan files
+-> build deterministic code graph
+-> show project overview
+-> create one detected task
+-> ask agent for plan
+-> apply one safe patch
+-> show diff
+-> run detected target-project test/build command
+-> accept or rollback
+```
+
+This slice proves the whole product loop.
+
+Do not start with a large settings system, marketplace, cloud sync, plugin store or complex multi-agent UI before this works.
+
+OpenHands parity must be present in this slice:
+
+- user can type a direct task;
+- agent can read files;
+- agent can edit files through controlled patches;
+- agent can run approved commands in process runtime;
+- action/observation history is visible;
+- terminal output is visible;
+- git changes and diff are visible;
+- user can accept or rollback.
+
+## Desktop App Bootstrap
+
+JavaFX starts the desktop shell. Spring Boot owns application services.
+
+Rules:
+
+- JavaFX controllers are thin.
+- JavaFX controllers call ViewModels or application services.
+- Spring creates services, repositories, mappers, graph engine, agent runtime and integrations.
+- Long work never runs on the JavaFX Application Thread.
+- UI updates return to the JavaFX Application Thread.
+- All visible strings come from i18n resource bundles.
+
+Recommended bootstrap classes:
+
+```text
+ChatlyCodeApplication
+DesktopLauncher
+SpringJavaFxBridge
+MainWindowController
+MainWindowViewModel
+```
+
+## Persistence Blueprint
+
+Use one local SQLite database file per application profile, with clear schema ownership.
+
+Product state uses JPA/Hibernate:
+
+- projects;
+- settings;
+- model profiles;
+- tasks;
+- conversations;
+- agent runs;
+- tool events;
+- update state;
+- user preferences.
+
+Code graph uses Spring JDBC/JdbcClient:
+
+- `code_files`;
+- `code_nodes`;
+- `code_edges`;
+- `code_unresolved_refs`;
+- `code_symbols`;
+- `code_scan_runs`;
+- `code_graph_metadata`.
+
+Liquibase XML changelog layout:
+
+```text
+src/main/resources/db/changelog/db.changelog-master.xml
+src/main/resources/db/changelog/product/001-create-projects.xml
+src/main/resources/db/changelog/product/002-create-tasks.xml
+src/main/resources/db/changelog/graph/001-create-code-files.xml
+src/main/resources/db/changelog/graph/002-create-code-nodes.xml
+src/main/resources/db/changelog/graph/003-create-code-edges.xml
+```
+
+Rules:
+
+- every schema change is a Liquibase XML changeset;
+- changeset ids are stable;
+- destructive changes include rollback notes;
+- graph rebuild must not corrupt product state;
+- large graph writes use explicit transactions and batches.
+
+## Code Graph Blueprint
+
+Implement the Java version of the CodeGraph-style pipeline described in `13_code_graph_engine.md`.
+
+Primary flow:
+
+```text
+ProjectScanner
+-> FileInventoryService
+-> LanguageDetector
+-> TreeSitterAstExtractor
+-> LanguageExtractor
+-> CodeGraphWriter
+-> ReferenceResolver
+-> FrameworkResolver
+-> GraphQueryService
+-> AgentContextBuilder
+-> PromptAssembler
+```
+
+The graph must be deterministic and must not depend on the LLM.
+
+Rules:
+
+- LLM can explain graph facts, not invent them.
+- unresolved references are stored and visible.
+- edge provenance is stored.
+- confidence is explicit.
+- generated files are detected and skipped unless configured.
+- context returned to the agent is bounded.
+
+## Agent Runtime Blueprint
+
+Agent runtime is a state machine, not an uncontrolled chat loop.
+
+Core states:
+
+```text
+Created
+-> UnderstandingProject
+-> Planning
+-> WaitingForApproval
+-> Executing
+-> Testing
+-> WaitingForReview
+-> Completed
+```
+
+Failure states:
+
+```text
+Blocked
+Failed
+Cancelled
+RolledBack
+```
+
+Rules:
+
+- no file edit without checkpoint;
+- no hidden shell commands;
+- every tool call is logged;
+- repeated failed actions are capped;
+- agent must explain plan before edits;
+- all edits go through `workspace-safety`;
+- user can cancel long operations.
+
+## Prompt Assembly Blueprint
+
+Prompt assembly must be evidence-based.
+
+Required input:
+
+- user task;
+- current project summary;
+- relevant graph nodes and edges;
+- relevant files;
+- detected framework conventions;
+- previous failed attempts;
+- current git state;
+- allowed tools;
+- command policy;
+- output format contract.
+
+Prompt assembler must not dump the whole repository into the model.
+
+The target format:
+
+```text
+Task
+Project Facts
+Relevant Architecture
+Relevant Files
+Constraints
+Allowed Tools
+Expected Plan Format
+Expected Patch/Test Summary Format
+```
+
+## C4 Blueprint
+
+C4 generation uses graph evidence first and LLM wording second.
+
+Flow:
+
+```text
+GraphQueryService
+-> ArchitectureInferenceService
+-> C4ModelBuilder
+-> MermaidC4Renderer
+-> DiagramReviewPanel
+```
+
+Rules:
+
+- generated diagrams link back to evidence where possible;
+- uncertain relationships are marked as inferred;
+- user can edit names/descriptions;
+- diagrams can be exported as Markdown/Mermaid.
+
+## Multi-Agent Blueprint
+
+Multi-agent work is coordinated, not chaotic.
+
+Recommended roles:
+
+- Coordinator agent: owns task state and final decisions.
+- Architect agent: reads graph and proposes design.
+- Implementer agent: prepares patch.
+- Reviewer agent: checks diff, risks and missing tests.
+- Test agent: runs build/test commands and summarizes failures.
+
+Concurrency rules:
+
+- multiple agents may read in parallel;
+- only one writer may edit a file at a time;
+- WorkspaceSafety serializes patches;
+- Coordinator resolves conflicts;
+- all subagent outputs become durable events.
+
+## UI Blueprint
+
+First production-quality screens:
+
+- Project picker.
+- Project dashboard.
+- Architecture map.
+- Problems and tasks board.
+- Agent run screen.
+- Diff review screen.
+- Settings screen.
+- Update prompt dialog.
+
+The main screen should show:
+
+- project health;
+- scan status;
+- current architecture summary;
+- problem/task list;
+- agent activity;
+- last diff/test result.
+
+Do not build a marketing landing page inside the app.
+
+## Quality Gates For AI-Generated Code
+
+Every implementation task must satisfy:
+
+- compiles;
+- tests added or explicitly justified;
+- no JavaFX Application Thread blocking;
+- no Entity leakage to UI;
+- no direct repository calls from controllers;
+- no raw LLM HTTP calls outside `llm-gateway`;
+- no schema changes without Liquibase XML;
+- no custom framework replacement without documented reason;
+- logs do not expose secrets;
+- rollback path exists for file edits.
+
+## MVP Acceptance Criteria
+
+MVP is acceptable only when:
+
+- app opens a real local project;
+- initial scan completes without freezing UI;
+- code graph is persisted in SQLite;
+- graph can answer symbol/file relationship queries;
+- project overview is generated from graph evidence;
+- tasks are separated into bug/problem/improvement/refactor;
+- agent can produce a plan before editing;
+- user can approve or reject;
+- patch is applied through controlled API;
+- diff is visible;
+- build/test command can run;
+- rollback works;
+- English and Russian UI resources exist;
+- installer can be produced for at least one target OS.
+
+## What An AI Implementer Must Not Do
+
+- Do not skip the graph and rely only on grep plus LLM.
+- Do not put business logic into JavaFX controllers.
+- Do not use JPA entities as UI models.
+- Do not create a custom DI container, event bus, migration runner, i18n framework or mapper framework.
+- Do not mix Flyway and Liquibase.
+- Do not use DuckDB unless the architecture is explicitly revised later.
+- Do not add cloud dependency to the local-first core.
+- Do not make agent edits without checkpoint and review.
+
+
+
+================================================================================
+FILE: concept\17_interface_walkthrough.md
+PATH: C:\projects\chatly-code\concept\17_interface_walkthrough.md
+================================================================================
+
+# Interface Walkthrough
+
+## Цель
+
+Этот файл описывает интерфейс простыми словами. Его задача: чтобы разработчик, дизайнер или AI-агент мог представить продукт в голове и не превратить его в обычный чат с кнопкой "сгенерировать код".
+
+Chatly Code должен ощущаться как локальная desktop-IDE для агентной разработки:
+
+- как OpenHands по агентному циклу;
+- лучше для старых проектов за счет локального code graph, C4, задач, классификации проблем и безопасного review-flow;
+- понятнее для обычного разработчика, которому надо не просто поговорить с моделью, а реально доработать проект.
+
+## 1. Первый запуск
+
+Пользователь открывает программу.
+
+На экране нет лендинга, рекламы и большого hero-блока. Сразу рабочий стартовый экран:
+
+```text
+Chatly Code
+
+Open local project
+Recent projects
+Model settings
+Language: English / Русский
+```
+
+Слева маленький список последних проектов. По центру большая рабочая зона с кнопкой `Open local project`. Справа короткая панель статуса:
+
+```text
+Model: not configured
+Sandbox: local
+Updates: up to date
+```
+
+Если модель еще не настроена, программа спокойно предлагает добавить provider:
+
+```text
+OpenAI-compatible
+Anthropic-compatible
+Local Ollama
+Custom endpoint
+```
+
+Пользователь выбирает модель один раз. Потом он просто открывает проект.
+
+## 2. Открытие старого проекта
+
+Пользователь нажимает `Open local project` и выбирает папку старого проекта.
+
+Например:
+
+```text
+C:\work\old-crm
+```
+
+Программа открывает главное окно.
+
+Верхняя панель:
+
+```text
+old-crm | branch: main | model: GPT / local | agent: idle | sandbox: local
+```
+
+Слева появляется дерево проекта:
+
+```text
+Files
+Modules
+Architecture
+Search
+```
+
+В центре пока экран сканирования. Справа пустой inspector, который потом будет показывать детали выбранного файла, проблемы, компонента или задачи.
+
+Снизу есть панель:
+
+```text
+Terminal | Tests | Agent Log | Problems
+```
+
+Смысл: пользователь сразу видит, что это не чат, а рабочая среда.
+
+## 3. Первичный scan
+
+После открытия проекта программа сама запускает scan.
+
+На центральном экране видно пошаговый прогресс:
+
+```text
+Scanning project
+
+Reading file tree
+Detecting languages
+Detecting build tool
+Reading build manifests
+Reading git status
+Finding tests
+Reading README and docs
+Building AST
+Building code graph
+Resolving references
+Detecting architecture layers
+Finding risks and problems
+Preparing C4 draft
+Preparing agent context
+```
+
+Важно: пользователь видит не "AI thinking", а конкретные технические действия.
+
+В этот момент программа:
+
+- читает файлы;
+- определяет языки;
+- находит build tool конкретного проекта;
+- находит команды build/test/lint конкретного проекта;
+- строит AST через tree-sitter или другой parser;
+- сохраняет graph в SQLite;
+- ищет связи: controller -> service -> repository, module -> module, file -> symbol;
+- помечает unresolved references;
+- строит первый architecture summary;
+- готовит базовые C4-диаграммы;
+- создает список найденных проблем.
+
+LLM не должен придумывать структуру проекта. Сначала факты из code graph, потом объяснение человеческим языком.
+
+Важно: Gradle обязателен для сборки самого Chatly Code, но не для проектов пользователя.
+
+Если открыт Rust-проект, программа должна найти что-то вроде:
+
+```text
+cargo test
+cargo check
+```
+
+Если открыт Node.js-проект:
+
+```text
+npm test
+npm run build
+pnpm test
+```
+
+Если открыт Python-проект:
+
+```text
+pytest
+uv run pytest
+poetry run pytest
+```
+
+Если открыт Java-проект:
+
+```text
+./gradlew test
+mvn test
+```
+
+То есть агент запускает не Gradle по умолчанию, а detected/approved команды конкретного репозитория.
+
+## 4. Главный dashboard после scan
+
+Когда scan завершился, пользователь попадает на `Overview`.
+
+Экран выглядит примерно так:
+
+```text
+Project overview
+
+Stack
+Java, Spring Boot, Gradle, PostgreSQL
+
+Build
+./gradlew test
+
+Architecture
+Monolith with web, service and persistence layers.
+Main flow: Controller -> Service -> Repository -> Database.
+
+Health
+Bugs: 4
+Risks: 11
+Improvements: 18
+Tech debt: 9
+
+Recommended next actions
+1. Fix high-risk controller logic
+2. Add missing tests around order calculation
+3. Split large UserService
+```
+
+Слева дерево проекта уже не просто дерево файлов. Там есть режимы:
+
+```text
+Files
+Modules
+Architecture
+```
+
+В `Architecture` пользователь видит:
+
+```text
+Controllers
+Services
+Repositories
+External Clients
+Database
+Configuration
+Tests
+```
+
+То есть старый проект становится понятным не только как куча файлов, а как система.
+
+## 5. Вкладка Architecture
+
+Пользователь нажимает `Architecture`.
+
+В центре открывается карта проекта:
+
+```text
+Web Layer
+  UserController
+  OrderController
+
+Application Layer
+  UserService
+  OrderService
+
+Persistence Layer
+  UserRepository
+  OrderRepository
+
+External
+  PaymentClient
+  EmailClient
+
+Database
+  PostgreSQL
+```
+
+Это может быть интерактивная graph-view или аккуратная C4/Mermaid view.
+
+Пользователь кликает `OrderController`.
+
+Справа inspector показывает:
+
+```text
+OrderController
+
+Responsibilities detected:
+- accepts order HTTP requests
+- validates request
+- calculates discount
+- checks order status
+
+Files:
+src/main/java/.../OrderController.java
+
+Depends on:
+OrderService
+OrderRepository
+
+Problems:
+1 high-risk issue
+2 improvements
+```
+
+Главное: пользователь понимает, что этот controller делает слишком много.
+
+## 6. C4-диаграммы
+
+Пользователь нажимает вкладку `C4`.
+
+Сверху переключатель:
+
+```text
+Context | Containers | Components | Code
+```
+
+На `Context` видно:
+
+```text
+User -> old-crm -> PostgreSQL
+old-crm -> Payment Gateway
+old-crm -> Email Provider
+```
+
+На `Containers` видно:
+
+```text
+Desktop/browser client
+Spring Boot application
+PostgreSQL database
+External payment API
+```
+
+На `Components` видно:
+
+```text
+OrderController -> OrderService -> OrderRepository -> Database
+OrderService -> PaymentClient -> Payment Gateway
+```
+
+Если связь точная, она помечается как evidence-backed. Если программа не уверена, связь помечается как inferred.
+
+Пользователь может нажать на связь и увидеть:
+
+```text
+Evidence:
+OrderService.java:42 calls PaymentClient.charge(...)
+```
+
+Так C4 не выглядит как красивая фантазия. Это объяснение проекта по фактам.
+
+## 7. Вкладка Problems
+
+Пользователь нажимает `Problems`.
+
+Проблемы не лежат общей кучей. Они разделены:
+
+```text
+Bugs
+Risks
+Tech Debt
+Improvements
+Feature Ideas
+```
+
+Карточка проблемы выглядит так:
+
+```text
+Risk / High
+OrderController contains business logic
+
+Why it matters:
+Controller mixes HTTP layer and domain rules. Tests become harder and changes become risky.
+
+Evidence:
+OrderController.java:57
+OrderController.java:81
+
+Suggested task:
+Move discount and order status rules to OrderService and add tests.
+
+Actions:
+Open
+Create task
+Ignore
+```
+
+Пользователь не обязан сам формулировать задачу. Программа уже предлагает нормальную инженерную задачу.
+
+## 8. Создание задачи из проблемы
+
+Пользователь нажимает `Create task`.
+
+Открывается задача:
+
+```text
+Task: Move order business logic out of OrderController
+
+Type: Improvement
+Risk: Medium
+Source: detected problem
+
+Goal:
+Move discount calculation and status validation into OrderService.
+
+Definition of done:
+- controller only handles request/response flow;
+- business rules live in service;
+- tests cover discount and status rules;
+- detected project test command passes.
+```
+
+Кнопки:
+
+```text
+Generate plan
+Run agent
+Edit task
+Defer
+```
+
+Если пользователь новичок, он просто нажимает `Generate plan`.
+
+Если пользователь опытный, он может вручную поправить цель и definition of done.
+
+## 9. Создание своей фичи
+
+Пользователь хочет не только чинить старое, но и добавить новую возможность.
+
+Он нажимает кнопку `New task`.
+
+Открывается форма:
+
+```text
+What do you want to change?
+
+[ Add export of monthly orders to CSV ]
+
+Type:
+Feature / Bug / Refactor / Test / Docs / Investigation
+
+Scope:
+Whole project / Selected module / Selected files
+```
+
+Пользователь пишет простыми словами:
+
+```text
+Добавь экспорт заказов за месяц в CSV.
+```
+
+Программа не сразу пишет код. Сначала она уточняет задачу через graph:
+
+```text
+I found order-related code:
+- OrderController
+- OrderService
+- OrderRepository
+- OrderDto
+- OrderServiceTest
+
+Likely implementation area:
+- web endpoint or UI action
+- service method for monthly order query
+- CSV export utility
+- tests
+```
+
+Потом предлагает план:
+
+```text
+Plan draft
+
+1. Inspect existing order query methods.
+2. Add service method for monthly order export.
+3. Add CSV formatter.
+4. Add controller endpoint or command according to project style.
+5. Add tests.
+6. Run detected project test command.
+```
+
+Пользователь нажимает `Approve`.
+
+## 10. Agent screen
+
+Когда агент работает, пользователь видит не магический чат, а понятный журнал.
+
+Центр экрана:
+
+```text
+Agent run: Move order business logic out of OrderController
+
+Step 1: Understanding relevant files
+Step 2: Planning changes
+Step 3: Waiting for approval
+Step 4: Applying patch
+Step 5: Running tests
+Step 6: Preparing review
+```
+
+Ниже action log:
+
+```text
+Read: OrderController.java
+Read: OrderService.java
+Read: OrderServiceTest.java
+Search: discount calculation
+Patch: OrderController.java
+Patch: OrderService.java
+Patch: OrderServiceTest.java
+Command: detected project test command
+```
+
+Каждый пункт раскрывается. Пользователь может посмотреть, что именно агент прочитал и почему.
+
+Если агент хочет выполнить опасную команду, появляется confirmation:
+
+```text
+Agent wants to run:
+detected project test command
+
+Reason:
+Verify changes after moving business logic.
+
+Allow once
+Always allow this safe test command for this project
+Reject
+```
+
+## 11. Multi-agent режим
+
+Для сложной задачи программа может включить несколько ролей, но пользователь не должен видеть хаос.
+
+На экране это выглядит так:
+
+```text
+Coordinator
+Owns task and final plan
+
+Architect
+Checks project structure and risks
+
+Implementer
+Prepares patch
+
+Reviewer
+Checks diff and missing tests
+
+Tester
+Runs build/test commands
+```
+
+Пользователь видит компактный статус:
+
+```text
+Architect: done
+Implementer: editing
+Reviewer: waiting
+Tester: waiting
+```
+
+Важно: только один агент пишет файлы. Остальные читают, анализируют и дают выводы. Это защищает проект от конфликтов.
+
+## 12. Diff review
+
+Когда агент закончил, автоматически открывается `Diff`.
+
+Слева список файлов:
+
+```text
+OrderController.java
+OrderService.java
+OrderServiceTest.java
+```
+
+В центре side-by-side diff.
+
+Справа summary:
+
+```text
+What changed:
+- discount logic moved to OrderService;
+- controller now delegates to service;
+- added tests for discount cases.
+
+Tests:
+detected project test command
+146 passed
+
+Risk after changes:
+Low
+```
+
+Кнопки:
+
+```text
+Accept changes
+Request revision
+Rollback
+Create commit
+```
+
+Пользователь может принять все, попросить доработку или откатить.
+
+## 13. Если тесты упали
+
+Если test command упал, программа не прячет это в терминале.
+
+Открывается понятный экран:
+
+```text
+Tests failed
+
+Failed test:
+OrderServiceTest.shouldCalculateVipDiscount
+
+Reason:
+Expected 10%, actual 5%.
+
+Likely cause:
+Existing VIP rule was not preserved during refactor.
+
+Actions:
+Ask agent to fix
+Open failed test
+Rollback
+```
+
+Пользователь нажимает `Ask agent to fix`, и агент получает новую подзадачу с конкретным failure context.
+
+## 14. Knowledge и память проекта
+
+После нескольких задач программа накапливает знание проекта.
+
+Во вкладке `Knowledge` есть:
+
+```text
+Architecture notes
+Project rules
+Accepted decisions
+Generated C4 docs
+Known risky files
+Completed tasks
+Ignored problems
+```
+
+Пример decision:
+
+```text
+Decision:
+Business rules must stay in service layer, not controllers.
+
+Accepted after task:
+T-104 Move order business logic out of OrderController.
+```
+
+Следующие агенты используют это как контекст и не повторяют старые ошибки.
+
+## 15. Как пользователь перестает руками писать код
+
+Обычный рабочий день выглядит так:
+
+```text
+Open project
+Review detected problems
+Pick one task or create feature task
+Generate plan
+Approve plan
+Watch agent execution
+Review diff
+Run tests
+Accept or rollback
+Create commit
+```
+
+Пользователь больше не пишет руками каждую строку. Он работает как инженер-руководитель изменений:
+
+- формулирует цель;
+- смотрит план;
+- контролирует риски;
+- принимает diff;
+- не теряет понимание архитектуры.
+
+## 16. Почему это должно быть не хуже OpenHands
+
+OpenHands силен тем, что дает агенту tools, shell, file editing, browser/runtime loop и рабочий цикл "plan -> act -> observe".
+
+Chatly Code должен взять это ядро, но усилить desktop-продуктом:
+
+- локальное приложение, не зависящее от web-сервера;
+- project understanding перед coding;
+- deterministic code graph до LLM;
+- C4 architecture из фактов проекта;
+- problem/task board вместо хаотичного чата;
+- явная классификация: bug, risk, improvement, tech debt, feature;
+- безопасный git checkpoint до edits;
+- обязательный diff review;
+- target-project build/test flow;
+- rollback как нормальная кнопка;
+- мультиязычный UI;
+- локальная история решений проекта.
+
+Итог: пользователь не просто просит AI "сделай фичу", а ведет разработку через управляемый engineering workflow.
+
+OpenHands-like execution loop for Chatly Code:
+
+```text
+User task
+-> project context
+-> agent plan
+-> user approval
+-> tool action
+-> observation from file system / terminal / graph
+-> patch
+-> live diff
+-> detected target-project test/build command
+-> test/build output observation
+-> reviewer summary
+-> accept, request revision or rollback
+```
+
+This loop is not Gradle-specific. Gradle is only the build system for Chatly Code itself. The target project decides the command:
+
+```text
+Rust: cargo test
+Node.js: npm test / pnpm test
+Python: pytest / uv run pytest
+Go: go test ./...
+Java Gradle: ./gradlew test
+Java Maven: mvn test
+```
+
+## 17. Главное ощущение интерфейса
+
+Интерфейс должен ощущаться так:
+
+```text
+Я открыл старый проект.
+Программа сама поняла структуру.
+Она показала архитектуру.
+Она нашла реальные проблемы.
+Она отличила баг от улучшения.
+Я выбрал задачу или написал новую фичу.
+Агенты составили план.
+Я одобрил.
+Они внесли изменения.
+Тесты запустились.
+Я увидел diff.
+Я принял или откатил.
+Проект стал лучше, а я не потерял контроль.
+```
+
+
+
+================================================================================
+FILE: concept\18_openhands_parity_requirements.md
+PATH: C:\projects\chatly-code\concept\18_openhands_parity_requirements.md
+================================================================================
+
+# OpenHands Parity Requirements
+
+## Goal
+
+Chatly Code must not be only an architecture scanner or a pretty AI chat. It must include the core agentic development capabilities that make OpenHands useful:
+
+```text
+read files
+edit files
+run commands
+observe results
+continue work
+show terminal output
+show git changes/diff
+let the user review and decide
+```
+
+The product may differ in UX and architecture, but this baseline is mandatory.
+
+## Required Agent Capabilities
+
+The agent must be able to:
+
+- read files with size limits;
+- list files with ignore rules;
+- search code;
+- inspect the code graph;
+- inspect git status;
+- create safe patches;
+- edit files through controlled APIs;
+- run approved shell commands;
+- run detected project build/test/lint commands;
+- inspect command output;
+- inspect git changes and file diffs;
+- ask for approval when policy requires it;
+- recover from failed commands without repeating the same failed action endlessly.
+
+The agent must not directly mutate files outside `workspace-safety`.
+
+Implementation rule:
+
+```text
+Do not implement these coding-agent tools from scratch.
+Use Spring AI Agent Utils first.
+```
+
+Reference:
+
+```text
+C:\projects\chatly-code\examples\spring-ai-agent-utils-main
+```
+
+Use/adapt its FileSystemTools, ShellTools, GrepTool, GlobTool, TodoWriteTool, SkillsTool, TaskTools, subagent framework, memory tools and A2A support. Chatly Code adds policy, sandbox, graph context, durable events, UI and review workflow around those tools.
+
+## Sandbox And Runtime
+
+The product must support runtime modes as first-class architecture, not as a UI detail.
+
+Required runtime modes:
+
+```text
+process
+docker
+remote
+```
+
+### process runtime
+
+Runs commands on the local machine with strict command policy.
+
+Good for:
+
+- MVP;
+- trusted local projects;
+- fast feedback;
+- simple desktop setup.
+
+Risks:
+
+- weaker isolation;
+- command policy must be strict;
+- secrets and environment filtering matter.
+
+### docker runtime
+
+Runs commands inside Docker/Podman with mounted workspace and resource limits.
+
+Good for:
+
+- risky projects;
+- dependency installs;
+- unknown scripts;
+- reproducible execution.
+
+Required controls:
+
+- workspace mount policy;
+- network policy;
+- environment filtering;
+- CPU/memory limits;
+- container cleanup;
+- command timeout.
+
+### remote runtime
+
+Runs agent commands through a remote runtime service.
+
+Good for:
+
+- heavy projects;
+- team/company setups;
+- machines without local Docker;
+- future cloud/enterprise edition.
+
+Required controls:
+
+- authentication;
+- runtime status;
+- log streaming;
+- workspace sync policy;
+- secret redaction;
+- explicit user consent.
+
+## Action / Observation Loop
+
+The core agent loop must be event-based:
+
+```text
+Task
+-> Context
+-> Plan
+-> Action
+-> Observation
+-> Next action
+-> Patch
+-> Diff
+-> Test/build command
+-> Observation
+-> Review
+-> Accept / revise / rollback
+```
+
+Actions are what the agent tries to do.
+Observations are what actually happened.
+
+Examples:
+
+```text
+Action: read file src/main.rs
+Observation: file content loaded, 184 lines
+
+Action: run cargo test
+Observation: 2 tests failed, output captured
+
+Action: apply patch
+Observation: 3 files changed, diff available
+```
+
+Rules:
+
+- every action must create a durable event;
+- every observation must be stored;
+- UI must show action and observation history;
+- agent prompts must receive recent relevant observations;
+- failed observations must influence the next action;
+- repeated failure loops must be stopped.
+
+## UI Parity
+
+The desktop UI must include these OpenHands-like working surfaces:
+
+- conversation view;
+- agent action log;
+- terminal;
+- tabs;
+- git changes;
+- file diff;
+- runtime status;
+- task state;
+- settings;
+- model/provider settings.
+
+Recommended main tabs:
+
+```text
+Overview
+Conversation
+Agent Run
+Terminal
+C4
+Problems
+Tasks
+Git Changes
+Diff
+Knowledge
+Settings
+```
+
+Conversation is not the whole product, but it must exist. Some users want the direct "give task, agent works" flow.
+
+## Service Architecture Parity
+
+The product must separate responsibilities similarly to OpenHands concepts, adapted to Java/Spring/JavaFX.
+
+Required services:
+
+```text
+Desktop UI
+App Server
+Agent Server
+Sandbox Service
+Runtime Service
+Workspace Service
+Git Service
+Conversation Service
+Settings Service
+LLM Gateway
+Code Graph Service
+Task Service
+Tool Service
+```
+
+### App Server
+
+Spring Boot local application backend.
+
+Responsibilities:
+
+- app lifecycle;
+- settings;
+- project registry;
+- task registry;
+- conversation registry;
+- UI-facing application facade;
+- event streaming to JavaFX ViewModels.
+
+### Agent Server
+
+Agent execution boundary.
+
+Responsibilities:
+
+- receive user task;
+- build context;
+- call LLM through `llm-gateway`;
+- select actions;
+- call tools;
+- process observations;
+- maintain agent state;
+- stream events.
+
+In MVP it may run in the same JVM process, but it must be architecturally separated.
+
+### Sandbox Service
+
+Runtime lifecycle boundary.
+
+Responsibilities:
+
+- create process/docker/remote runtimes;
+- report runtime status;
+- start/stop/pause/resume runtime;
+- execute commands through policy;
+- stream terminal output;
+- clean resources.
+
+### Workspace Service
+
+Controls project files.
+
+Responsibilities:
+
+- read files;
+- apply patches;
+- enforce workspace root;
+- protect ignored/secret files;
+- coordinate file locks;
+- collect diff.
+
+### Git Service
+
+Responsibilities:
+
+- status;
+- branch;
+- checkpoint;
+- diff;
+- changed files;
+- commit;
+- rollback through safe APIs.
+
+## Integrations
+
+The product must integrate with:
+
+- local repositories;
+- Git status and branches;
+- GitHub/GitLab later;
+- model providers through Spring AI;
+- local Ollama;
+- OpenAI-compatible endpoints;
+- MCP tools;
+- Docker/Podman;
+- settings profiles;
+- runtime status.
+
+Repository integrations should not be required for local-first MVP, but the architecture must not block them.
+
+## "Give Task And Agent Works" Flow
+
+The product must support a direct OpenHands-like flow:
+
+```text
+Open project
+-> type task
+-> agent inspects project
+-> agent plans
+-> user approves
+-> agent reads files
+-> agent edits files
+-> agent runs commands
+-> agent observes results
+-> agent fixes failures if needed
+-> user reviews diff
+-> user accepts or rolls back
+```
+
+This flow must work even if the user ignores C4, Problems and Task Board.
+
+The C4/code-graph/task-board experience is an upgrade, not a blocker.
+
+## What Chatly Code Adds Beyond OpenHands
+
+Baseline OpenHands-like capabilities are mandatory, but differentiation comes from:
+
+- local desktop UX;
+- deterministic code graph before LLM;
+- C4 diagrams from graph evidence;
+- problem classification;
+- task board;
+- project knowledge base;
+- stricter diff/review/rollback workflow;
+- multilingual UI.
+
+## MVP Acceptance Criteria
+
+OpenHands parity MVP requires:
+
+- user can start a conversation/task;
+- agent can read files;
+- agent can edit files through patch API;
+- agent can run approved target-project commands;
+- terminal output is visible;
+- action/observation events are visible;
+- process runtime works;
+- git changes are visible;
+- file diff is visible;
+- user can accept or rollback;
+- runtime status is visible;
+- settings for LLM provider exist.
+
+Docker runtime can be MVP+1 if process runtime is solid, but architecture must include docker and remote from the start.
+
+
+
+================================================================================
+FILE: concept\19_mvp_scope_checklist.md
+PATH: C:\projects\chatly-code\concept\19_mvp_scope_checklist.md
+================================================================================
+
+# MVP Scope Checklist
+
+## Purpose
+
+This file defines the non-negotiable first product scope. If these items are not implemented, the MVP is not ready.
+
+The goal is not to build a full IDE. The goal is to build a local engineering tool that understands a project, builds a code graph, shows architecture/problems/tasks, and lets an agent safely improve the code.
+
+## 1. Project Opening And Scan
+
+The app must open a local project folder and detect:
+
+- primary languages:
+  - Java;
+  - Rust;
+  - TypeScript / JavaScript;
+  - Python and Go can follow, but architecture must not block them;
+- build tools and package managers:
+  - Gradle;
+  - Maven;
+  - Cargo;
+  - npm;
+  - pnpm/yarn later;
+- Git status;
+- test command;
+- build command where available;
+- main source folders;
+- test source folders;
+- dependency/build manifest files;
+- ignored/generated files.
+
+Important:
+
+- Gradle is mandatory only for building Chatly Code itself.
+- User projects can use any build system.
+- The app must run detected/approved target-project commands, not hardcoded Gradle commands.
+
+## 2. Code Graph
+
+Code graph is the core of the product.
+
+Minimum graph node types:
+
+- File;
+- Module / package;
+- Class;
+- Interface;
+- Record;
+- Method;
+- Function;
+- Field / variable where useful;
+- Import;
+- Reference.
+
+Minimum graph edge types:
+
+- contains;
+- imports;
+- calls;
+- references;
+- extends;
+- implements;
+- instantiates;
+- depends_on;
+- returns / type_of where useful.
+
+For Java/Spring, the graph must classify:
+
+- Controller;
+- Service;
+- Repository;
+- Entity;
+- DTO;
+- Config;
+- KafkaListener;
+- Scheduled job;
+- Feign client;
+- RestClient / WebClient client;
+- external client;
+- route/endpoint.
+
+The graph must be deterministic and stored locally in SQLite. LLM output must not be the source of truth for graph nodes or edges.
+
+## 3. Architecture Explorer
+
+Architecture Explorer is navigation, not decoration.
+
+It must show:
+
+- Controller -> Service -> Repository flow;
+- Module -> Module dependencies;
+- Class -> Dependencies;
+- Incoming dependencies;
+- Outgoing dependencies;
+- impact radius for selected node;
+- files connected to a selected node;
+- risks connected to a selected node;
+- tasks connected to a selected node.
+
+Clicking a node must show:
+
+- source files;
+- direct dependencies;
+- incoming dependencies;
+- outgoing dependencies;
+- detected problems;
+- related tasks;
+- links to code locations.
+
+## 4. C4 Auto Draft
+
+Minimum C4 output:
+
+- Context;
+- Containers;
+- Components.
+
+MVP can generate Mermaid Markdown first. A polished diagram UI can come later.
+
+Rules:
+
+- C4 must be based on code graph evidence;
+- uncertain relationships must be marked as inferred;
+- LLM can improve wording, but cannot invent structure;
+- generated C4 must link back to files/nodes where possible.
+
+## 5. Problems
+
+First problem detection rules:
+
+- Controller directly uses Repository;
+- Entity leaks into API/UI;
+- God Service;
+- Huge Class;
+- Huge Method;
+- Circular Dependency;
+- No Tests;
+- Dead Code candidate;
+- Too many dependencies;
+- layer violation;
+- high blast-radius file.
+
+Every problem must include:
+
+- type;
+- severity;
+- confidence;
+- evidence;
+- affected files/nodes;
+- suggested next step.
+
+Evidence is mandatory. No evidence means no problem card.
+
+## 6. Task Generator
+
+The app must generate a task directly from a problem.
+
+Example:
+
+```text
+Problem:
+OrderController uses OrderRepository directly.
+
+Task:
+Move data access from OrderController to OrderService.
+
+Files:
+- OrderController
+- OrderService
+- OrderRepository
+
+Risk:
+Medium
+```
+
+Generated task must include:
+
+- title;
+- problem source;
+- goal;
+- affected files;
+- risk;
+- suggested plan;
+- definition of done;
+- detected test/build command;
+- links to graph evidence.
+
+## 7. Graph-Aware Chat
+
+Chat must not be only "chat with files". It must be graph-aware.
+
+Required questions:
+
+```text
+Where is an order created?
+What can break if UserService changes?
+Show flow from controller to database.
+Which files depend on this class?
+Which tests cover this component?
+Why is this file risky?
+```
+
+The answer must use:
+
+- graph queries;
+- relevant files;
+- source snippets;
+- line links where available;
+- uncertainty markers when graph evidence is incomplete.
+
+## 8. Agent MVP
+
+Basic agent flow:
+
+```text
+Plan
+Approve
+Edit
+Diff
+Run detected target-project tests/build
+Accept / Rollback
+```
+
+Rules:
+
+- tooling must use Spring AI Agent Utils first;
+- custom code is allowed only for safety, events, policy, graph context, diff and UX wrappers;
+- no hidden edits;
+- no edit without plan;
+- no edit without checkpoint;
+- no command without policy;
+- every action creates an observation;
+- failed commands are shown and used as context for the next step.
+
+## 9. Workspace Safety
+
+Trust requirements:
+
+- Git status;
+- checkpoint or branch before edits;
+- no hidden edits;
+- diff always visible;
+- rollback;
+- command approval;
+- secret redaction;
+- workspace root enforcement;
+- ignored/secret files protected;
+- terminal output visible.
+
+No workspace safety means no agentic editing.
+
+## 10. Minimal UI
+
+This is not an IDE.
+
+Minimum screens/tabs:
+
+- Project Overview;
+- Architecture;
+- Problems;
+- Tasks;
+- Chat / Agent Log;
+- Diff;
+- Terminal / Test Output.
+
+Nice later:
+
+- richer C4 UI;
+- file editor;
+- PR integration;
+- marketplace;
+- cloud sync;
+- team dashboards.
+
+MVP must stay focused on project understanding and safe agentic change.
+
+
+
+
+================================================================================
+FILE: concept\20_domain_boundaries_and_language_plugins.md
+PATH: C:\projects\chatly-code\concept\20_domain_boundaries_and_language_plugins.md
+================================================================================
+
+# Domain Boundaries And Language Plugins
+
+## Purpose
+
+Chatly Code must stay modular enough to grow without turning into a set of god modules.
+
+The product has two different kinds of boundaries:
+
+- product domains and subdomains;
+- language/framework-specific analyzer plugins.
+
+Both boundaries must be explicit from the beginning.
+
+## Core Design Principles
+
+- High cohesion inside each domain.
+- Low coupling between domains.
+- SOLID without pointless abstraction.
+- KISS before clever architecture.
+- No god services.
+- No god files.
+- No UI business logic.
+- No persistence entities in JavaFX controllers or UI ViewModels.
+- No language-specific logic inside generic scanner/graph/task/agent core.
+
+If a class is hard to name, it probably owns too many responsibilities.
+
+## Product Domains
+
+### Project Domain
+
+Owns:
+
+- project registry;
+- opened project metadata;
+- project scan state;
+- detected languages;
+- detected build/test commands;
+- source/test folders;
+- project settings.
+
+Must not own:
+
+- AST parsing;
+- graph storage;
+- agent execution;
+- UI rendering.
+
+### Code Graph Domain
+
+Owns:
+
+- files/nodes/edges;
+- unresolved references;
+- graph schema;
+- graph queries;
+- graph freshness;
+- impact analysis.
+
+Must not own:
+
+- Java-specific rules directly;
+- Rust-specific rules directly;
+- problem text wording;
+- agent execution.
+
+Language-specific extraction and resolution are plugins behind interfaces.
+
+### Architecture Domain
+
+Owns:
+
+- architecture model;
+- C4 model;
+- layer model;
+- module graph;
+- relationships between architecture nodes and code graph evidence.
+
+Must not own:
+
+- parser implementation;
+- direct LLM guessing;
+- UI rendering.
+
+### Problem Detection Domain
+
+Owns:
+
+- problem rules;
+- severity;
+- confidence;
+- evidence links;
+- problem classification;
+- rule execution pipeline.
+
+Must not own:
+
+- task execution;
+- file edits;
+- UI rendering;
+- language-specific AST details.
+
+Language/framework-specific problem rules must be plugins.
+
+### Task Domain
+
+Owns:
+
+- task lifecycle;
+- task type;
+- priority;
+- risk;
+- definition of done;
+- links to problems/files/graph nodes/conversations.
+
+Must not own:
+
+- agent tool execution;
+- prompt low-level assembly;
+- direct filesystem edits.
+
+### Agent Domain
+
+Owns:
+
+- plan lifecycle;
+- action/observation loop;
+- agent state;
+- tool policy orchestration;
+- prompt assembly boundary.
+
+Must not own:
+
+- UI rendering;
+- direct file writes;
+- direct shell execution;
+- graph indexing;
+- language-specific inspections.
+
+Agent receives prepared context from deterministic services.
+
+### Workspace Safety Domain
+
+Owns:
+
+- workspace root enforcement;
+- git checkpoint/branch;
+- diff collection;
+- rollback;
+- command approval;
+- secret redaction;
+- file write policy.
+
+No agentic editing may bypass this domain.
+
+### Runtime Domain
+
+Owns:
+
+- process runtime;
+- Docker/Podman runtime;
+- remote runtime;
+- command execution;
+- terminal stream;
+- timeout/resource policy.
+
+Must not know Java/Rust/TypeScript language rules.
+
+### LLM Gateway Domain
+
+Owns:
+
+- Spring AI integration;
+- provider profiles;
+- model routing;
+- streaming responses;
+- token/cost tracking;
+- retries.
+
+Must not know UI details, database entities or filesystem mutation details.
+
+### UI Domain
+
+Owns:
+
+- JavaFX views;
+- ViewModels;
+- interaction state;
+- i18n labels;
+- user approvals.
+
+Must not own:
+
+- business rules;
+- repositories;
+- graph indexing;
+- agent tool execution;
+- persistence entities.
+
+## Recommended Package Boundary Pattern
+
+Use package-by-domain first, not package-by-technical-layer only.
+
+Recommended pattern:
+
+```text
+com.chatlycode.project
+  application
+  domain
+  adapter
+  port
+
+com.chatlycode.graph
+  application
+  domain
+  query
+  storage
+  language
+
+com.chatlycode.problem
+  application
+  domain
+  rule
+  language
+
+com.chatlycode.agent
+  application
+  domain
+  tool
+  prompt
+
+com.chatlycode.workspace
+  application
+  domain
+  git
+  policy
+
+com.chatlycode.runtime
+  application
+  domain
+  process
+  docker
+  remote
+```
+
+Avoid generic root packages:
+
+```text
+service
+manager
+helper
+utils
+common
+```
+
+Use them only for tiny, clearly scoped shared helpers.
+
+## Language Plugin Architecture
+
+Language-specific logic must live behind SPI interfaces.
+
+Core must depend on abstractions, not Java/Rust/TypeScript implementations.
+
+Required extension points:
+
+```java
+public interface LanguagePlugin {
+    String id();
+    Set<String> supportedLanguages();
+    List<BuildManifestDetector> buildManifestDetectors();
+    List<SourceRootDetector> sourceRootDetectors();
+    List<LanguageExtractor> extractors();
+    List<ReferenceResolver> referenceResolvers();
+    List<FrameworkResolver> frameworkResolvers();
+    List<ProblemRule> problemRules();
+    List<TestCommandDetector> testCommandDetectors();
+}
+```
+
+Core pipeline:
+
+```text
+ProjectScanner
+-> LanguagePluginRegistry
+-> selected plugins
+-> extraction/resolution/problem rules
+-> normalized graph/domain model
+```
+
+The normalized graph model belongs to Chatly Code core.
+Plugin-specific raw data must stay in plugin metadata.
+
+## Ports And Adapters
+
+Use ports/adapters where a boundary protects the core.
+
+Examples:
+
+```text
+LanguagePlugin port
+JavaLanguagePlugin adapter
+RustLanguagePlugin adapter
+TypeScriptLanguagePlugin adapter
+
+Runtime port
+ProcessRuntime adapter
+DockerRuntime adapter
+RemoteRuntime adapter
+
+LlmClient port
+SpringAiLlmClient adapter
+
+GitClient port
+JGit/CliGit adapter
+```
+
+Adapters may depend on external libraries.
+Domain/core must not depend on adapter implementation details.
+
+## Java/Spring Plugin
+
+Java/Spring-specific checks must live in Java/Spring plugin modules.
+
+Example module:
+
+```text
+language-java/
+  java-extractor
+  java-reference-resolver
+  spring-framework-resolver
+  spring-problem-rules
+```
+
+Java/Spring plugin owns:
+
+- package/import resolution;
+- class/interface/record extraction;
+- method/field extraction;
+- static import resolution;
+- annotation extraction;
+- Spring stereotype classification;
+- route detection;
+- Spring dependency injection edges;
+- repository/entity/dto/config detection;
+- KafkaListener detection;
+- Scheduled job detection;
+- Feign client detection;
+- RestClient/WebClient detection.
+
+Java/Spring plugin problem rules:
+
+- Controller directly uses Repository;
+- Entity leaks into API/UI;
+- Service depends on UI;
+- Repository calls Service;
+- missing tests for controller/service;
+- god service;
+- huge class;
+- huge method;
+- circular package/module dependency;
+- too many dependencies;
+- unbounded transaction risk where detectable;
+- blocking call in scheduled/async path where detectable.
+
+Core problem detector runs the rules. The Java plugin provides the Java-specific rules.
+
+## Rust Plugin
+
+Rust-specific logic must be isolated in a Rust plugin.
+
+Example module:
+
+```text
+language-rust/
+  rust-extractor
+  rust-reference-resolver
+  cargo-workspace-resolver
+  rust-problem-rules
+```
+
+Rust plugin owns:
+
+- Cargo.toml detection;
+- Cargo workspace members;
+- module tree;
+- function/struct/enum/trait extraction;
+- use/import resolution;
+- call/reference edges where possible;
+- test command detection.
+
+Rust plugin must not depend on Java/Spring plugin.
+
+## TypeScript Plugin
+
+TypeScript/JavaScript-specific logic must be isolated in a TS plugin.
+
+Example module:
+
+```text
+language-typescript/
+  ts-extractor
+  ts-reference-resolver
+  package-json-resolver
+  framework-resolvers
+  ts-problem-rules
+```
+
+TypeScript plugin owns:
+
+- package.json detection;
+- npm/pnpm/yarn scripts;
+- tsconfig path aliases;
+- import/export resolution;
+- function/class/component extraction;
+- framework-specific route/component detection later.
+
+## Extractable Library Rule
+
+Every language plugin must be extractable into a separate library later.
+
+Rules:
+
+- plugin modules depend on core SPI and normalized graph contracts;
+- core does not depend on plugin internals;
+- no Java plugin class may be referenced from generic graph/problem/task/agent core;
+- plugin configuration is loaded through registry;
+- plugin outputs normalized nodes/edges/problems;
+- plugin-specific metadata is stored as JSON/typed metadata behind stable keys;
+- tests for a plugin run without launching the desktop UI;
+- plugin packages use stable public interfaces.
+
+Bad:
+
+```text
+GraphQueryService imports SpringFrameworkResolver
+ProblemDetector imports JavaControllerRule directly
+AgentPromptAssembler checks Java annotations manually
+```
+
+Good:
+
+```text
+GraphQueryService uses normalized graph
+ProblemDetector runs ProblemRule from registered plugins
+PromptAssembler consumes evidence from graph/problem/task services
+```
+
+## Layering Rules
+
+Allowed dependency direction:
+
+```text
+UI
+-> application services
+-> domain services
+-> ports
+-> adapters
+```
+
+Domain must not depend on:
+
+- JavaFX;
+- JPA entities;
+- Spring MVC/controllers;
+- concrete SQLite repositories;
+- specific language plugins;
+- LLM provider SDKs.
+
+Adapters can depend on:
+
+- Spring;
+- SQLite/JDBC/JPA;
+- tree-sitter;
+- Spring AI Agent Utils;
+- Docker clients;
+- Git libraries;
+- language-specific parsers.
+
+## Data Mapping Rules
+
+Use separate models:
+
+- Domain model;
+- Persistence entity;
+- DTO;
+- ViewModel;
+- Graph row model;
+- Plugin metadata model.
+
+Rules:
+
+- no JPA Entity in UI;
+- no JPA Entity in agent prompts;
+- no JavaFX property model in domain;
+- MapStruct for repeated mapping;
+- direct mapping only for trivial one-off cases;
+- graph rows can use Spring JDBC/JdbcClient models for performance.
+
+## Review Checklist
+
+Before accepting implementation:
+
+- module has one clear domain owner;
+- no god service;
+- no god file;
+- UI controllers are thin;
+- domain logic is not in adapters;
+- language-specific logic is behind plugin SPI;
+- Java/Spring checks are not hardcoded in core;
+- Rust/TypeScript can be added without changing core APIs;
+- persistence entities do not leak to UI/agent;
+- dependencies point inward to stable contracts;
+- tests exist at domain and adapter levels.
+
+
+
+
+================================================================================
+FILE: concept\21_project_structure.md
+PATH: C:\projects\chatly-code\concept\21_project_structure.md
+================================================================================
+
+# Project Structure
+
+## Purpose
+
+This file describes the expected future repository structure for Chatly Code.
+
+It is a target architecture, not a prison. During MVP implementation, pragmatic compromises are allowed if they help ship a working vertical slice faster.
+
+Mandatory rule:
+
+```text
+Even when modules are temporarily merged, package boundaries and domain boundaries must stay clean.
+```
+
+This means the first MVP may start with fewer Gradle modules, but it must not mix UI, domain, persistence, agent runtime, code graph and language-specific analyzer logic into one god module.
+
+## Build Structure
+
+Chatly Code uses Gradle.
+
+Expected root:
+
+```text
+chatly-code/
+  settings.gradle.kts
+  build.gradle.kts
+  gradle.properties
+  gradlew
+  gradlew.bat
+  build-logic/
+  app-desktop/
+  app-server/
+  agent-server/
+  shared-kernel/
+  project-domain/
+  code-graph/
+  language-spi/
+  language-java/
+  language-rust/
+  language-typescript/
+  architecture-engine/
+  problem-detector/
+  task-manager/
+  agent-runtime/
+  llm-gateway/
+  workspace-safety/
+  runtime-service/
+  sandbox-service/
+  git-service/
+  conversation-service/
+  persistence/
+  localization/
+  updater/
+  mcp-integration/
+  docker-integration/
+  test-fixtures/
+  docs/
+  packaging/
+```
+
+## MVP Compromise Option
+
+For MVP, this can be reduced to fewer Gradle modules:
+
+```text
+chatly-code/
+  app-desktop/
+  app-core/
+  language-spi/
+  language-java/
+  shared-kernel/
+  test-fixtures/
+```
+
+Where `app-core` temporarily contains:
+
+```text
+project-domain
+code-graph
+architecture-engine
+problem-detector
+task-manager
+agent-runtime
+llm-gateway
+workspace-safety
+runtime-service
+git-service
+conversation-service
+persistence
+localization
+updater
+```
+
+This is acceptable only if package boundaries are already correct and moving packages into separate Gradle modules later is mechanical.
+
+## Module Responsibilities
+
+### app-desktop
+
+JavaFX desktop shell.
+
+```text
+app-desktop/
+  src/main/java/com/chatlycode/desktop/
+    ChatlyCodeDesktopApplication.java
+    DesktopLauncher.java
+    bridge/
+    view/
+    controller/
+    viewmodel/
+    component/
+    dialog/
+  src/main/resources/
+    fxml/
+    css/
+    icons/
+```
+
+Rules:
+
+- no business logic;
+- no repository access;
+- no direct file edits;
+- no JPA entities;
+- ViewModels/DTOs only.
+
+### app-server
+
+Spring Boot application facade for the desktop UI.
+
+```text
+app-server/
+  src/main/java/com/chatlycode/appserver/
+    ChatlyCodeApplication.java
+    config/
+    facade/
+    event/
+    lifecycle/
+```
+
+Responsibilities:
+
+- application lifecycle;
+- UI-facing services;
+- event streaming to JavaFX;
+- settings orchestration;
+- module wiring.
+
+### agent-server
+
+Agent execution boundary.
+
+```text
+agent-server/
+  src/main/java/com/chatlycode/agentserver/
+    AgentServerApplication.java
+    api/
+    session/
+    stream/
+    orchestration/
+```
+
+MVP may run this in the same JVM as `app-server`, but the boundary must stay visible.
+
+### shared-kernel
+
+Small shared primitives only.
+
+```text
+shared-kernel/
+  src/main/java/com/chatlycode/shared/
+    id/
+    time/
+    error/
+    event/
+    result/
+```
+
+Rules:
+
+- keep it tiny;
+- no domain behavior that belongs elsewhere;
+- no Spring-heavy code unless truly shared infrastructure.
+
+### project-domain
+
+Opened project model and scan state.
+
+```text
+project-domain/
+  src/main/java/com/chatlycode/project/
+    domain/
+    application/
+    port/
+    adapter/
+```
+
+Owns:
+
+- project registry;
+- project scan metadata;
+- detected stack;
+- build/test command profile;
+- source/test roots.
+
+### code-graph
+
+Normalized local code graph.
+
+```text
+code-graph/
+  src/main/java/com/chatlycode/graph/
+    domain/
+      CodeFile.java
+      CodeNode.java
+      CodeEdge.java
+      CodeGraph.java
+    application/
+      CodeGraphIndexer.java
+      GraphQueryService.java
+      AgentContextBuilder.java
+    storage/
+      CodeGraphJdbcRepository.java
+    query/
+      GraphTraverser.java
+    sync/
+      CodeGraphFileWatcher.java
+```
+
+Owns:
+
+- normalized graph model;
+- graph queries;
+- graph storage;
+- graph freshness;
+- context builder.
+
+Does not own:
+
+- Java/Spring AST details;
+- Rust AST details;
+- TypeScript AST details.
+
+### language-spi
+
+Stable language plugin contracts.
+
+```text
+language-spi/
+  src/main/java/com/chatlycode/language/spi/
+    LanguagePlugin.java
+    LanguageExtractor.java
+    ReferenceResolver.java
+    FrameworkResolver.java
+    ProblemRule.java
+    BuildManifestDetector.java
+    TestCommandDetector.java
+    SourceRootDetector.java
+```
+
+All language plugins depend on this.
+Generic core depends on this, not on concrete plugins.
+
+### language-java
+
+Java/Spring plugin.
+
+```text
+language-java/
+  src/main/java/com/chatlycode/language/java/
+    JavaLanguagePlugin.java
+    extract/
+    resolve/
+    spring/
+    rules/
+    build/
+    test/
+  src/test/java/
+```
+
+Owns:
+
+- Java class/interface/record/method extraction;
+- imports/static imports;
+- package resolution;
+- Spring stereotypes;
+- Spring routes;
+- Feign/RestClient/WebClient;
+- KafkaListener;
+- Scheduled;
+- Java/Spring problem rules.
+
+Must be extractable into a separate library later.
+
+### language-rust
+
+Rust plugin.
+
+```text
+language-rust/
+  src/main/java/com/chatlycode/language/rust/
+    RustLanguagePlugin.java
+    extract/
+    resolve/
+    cargo/
+    rules/
+```
+
+Owns:
+
+- Cargo manifest/workspace detection;
+- module/use resolution;
+- Rust nodes/edges;
+- Rust test command detection.
+
+### language-typescript
+
+TypeScript/JavaScript plugin.
+
+```text
+language-typescript/
+  src/main/java/com/chatlycode/language/typescript/
+    TypeScriptLanguagePlugin.java
+    extract/
+    resolve/
+    packagejson/
+    tsconfig/
+    rules/
+```
+
+Owns:
+
+- package.json scripts;
+- tsconfig path aliases;
+- import/export resolution;
+- TS/JS nodes/edges;
+- later framework plugins.
+
+### architecture-engine
+
+Architecture and C4 model.
+
+```text
+architecture-engine/
+  src/main/java/com/chatlycode/architecture/
+    domain/
+    application/
+    c4/
+    mermaid/
+```
+
+Builds:
+
+- module graph;
+- layer model;
+- C4 Context;
+- C4 Containers;
+- C4 Components.
+
+Uses graph evidence. Does not invent structure through LLM.
+
+### problem-detector
+
+Problem detection pipeline.
+
+```text
+problem-detector/
+  src/main/java/com/chatlycode/problem/
+    domain/
+    application/
+    rule/
+```
+
+Runs:
+
+- generic rules;
+- registered language plugin rules;
+- severity/confidence scoring;
+- evidence linking.
+
+### task-manager
+
+Task lifecycle.
+
+```text
+task-manager/
+  src/main/java/com/chatlycode/task/
+    domain/
+    application/
+    mapper/
+```
+
+Owns:
+
+- task creation;
+- task status;
+- risk;
+- definition of done;
+- links to problems, files, graph nodes and conversations.
+
+### agent-runtime
+
+Agent loop and tool orchestration.
+
+```text
+agent-runtime/
+  src/main/java/com/chatlycode/agent/
+    domain/
+    application/
+    prompt/
+    tool/
+    observation/
+    planner/
+    reviewer/
+```
+
+Uses:
+
+- Spring AI Agent Utils through adapters;
+- deterministic context from graph/problem/task services;
+- workspace safety for edits;
+- runtime service for commands.
+
+### llm-gateway
+
+Spring AI provider abstraction.
+
+```text
+llm-gateway/
+  src/main/java/com/chatlycode/llm/
+    domain/
+    application/
+    springai/
+    provider/
+```
+
+Owns:
+
+- model profiles;
+- Spring AI `ChatClient`;
+- provider routing;
+- retries;
+- streaming;
+- token/cost tracking.
+
+### workspace-safety
+
+Safe workspace mutation.
+
+```text
+workspace-safety/
+  src/main/java/com/chatlycode/workspace/
+    domain/
+    application/
+    patch/
+    policy/
+    secret/
+```
+
+Owns:
+
+- workspace root enforcement;
+- patch application;
+- diff collection;
+- secret redaction;
+- rollback coordination.
+
+### runtime-service
+
+Command execution abstraction.
+
+```text
+runtime-service/
+  src/main/java/com/chatlycode/runtime/
+    domain/
+    application/
+    process/
+    stream/
+```
+
+Owns:
+
+- command execution;
+- stdout/stderr stream;
+- exit code;
+- timeouts;
+- command observations.
+
+### sandbox-service
+
+Runtime lifecycle.
+
+```text
+sandbox-service/
+  src/main/java/com/chatlycode/sandbox/
+    domain/
+    application/
+    process/
+    docker/
+    remote/
+```
+
+Owns:
+
+- process runtime lifecycle;
+- Docker/Podman runtime lifecycle;
+- remote runtime lifecycle later;
+- runtime status.
+
+### git-service
+
+Git operations.
+
+```text
+git-service/
+  src/main/java/com/chatlycode/git/
+    domain/
+    application/
+    cli/
+    jgit/
+```
+
+Owns:
+
+- status;
+- branch;
+- checkpoint;
+- changed files;
+- diff;
+- commit;
+- rollback.
+
+### conversation-service
+
+Durable conversation and trajectory history.
+
+```text
+conversation-service/
+  src/main/java/com/chatlycode/conversation/
+    domain/
+    application/
+    event/
+```
+
+Owns:
+
+- user messages;
+- agent messages;
+- tool actions;
+- observations;
+- conversation/task links.
+
+### persistence
+
+Persistence configuration and migrations.
+
+```text
+persistence/
+  src/main/java/com/chatlycode/persistence/
+    config/
+    jpa/
+    jdbc/
+    transaction/
+  src/main/resources/db/changelog/
+    db.changelog-master.xml
+    product/
+    graph/
+```
+
+Rules:
+
+- Liquibase XML only;
+- JPA/Hibernate for product/domain state;
+- Spring JDBC/JdbcClient for high-volume graph writes.
+
+### localization
+
+Spring MessageSource integration.
+
+```text
+localization/
+  src/main/java/com/chatlycode/i18n/
+  src/main/resources/i18n/
+    messages.properties
+    messages_en.properties
+    messages_ru.properties
+```
+
+### updater
+
+Background updates.
+
+```text
+updater/
+  src/main/java/com/chatlycode/update/
+    domain/
+    application/
+    installer/
+```
+
+### mcp-integration
+
+MCP adapters.
+
+```text
+mcp-integration/
+  src/main/java/com/chatlycode/mcp/
+    client/
+    server/
+    tool/
+```
+
+### docker-integration
+
+Docker/Podman adapters.
+
+```text
+docker-integration/
+  src/main/java/com/chatlycode/docker/
+    client/
+    compose/
+```
+
+### test-fixtures
+
+Sample projects and fixtures.
+
+```text
+test-fixtures/
+  sample-java-spring/
+  sample-rust/
+  sample-typescript/
+  sample-broken-architecture/
+```
+
+## Dependency Direction
+
+Allowed direction:
+
+```text
+app-desktop
+-> app-server
+-> application/domain modules
+-> ports/SPI
+-> adapters
+```
+
+Language plugin direction:
+
+```text
+code-graph/problem-detector
+-> language-spi
+<- language-java/language-rust/language-typescript
+```
+
+Core must not import plugin internals.
+
+## Gradle Notes
+
+Recommended root settings:
+
+```kotlin
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
+rootProject.name = "chatly-code"
+
+include(
+    "app-desktop",
+    "app-server",
+    "agent-server",
+    "shared-kernel",
+    "project-domain",
+    "code-graph",
+    "language-spi",
+    "language-java",
+    "language-rust",
+    "language-typescript",
+    "architecture-engine",
+    "problem-detector",
+    "task-manager",
+    "agent-runtime",
+    "llm-gateway",
+    "workspace-safety",
+    "runtime-service",
+    "sandbox-service",
+    "git-service",
+    "conversation-service",
+    "persistence",
+    "localization",
+    "updater",
+    "mcp-integration",
+    "docker-integration",
+    "test-fixtures"
+)
+```
+
+For MVP, fewer includes are allowed if package boundaries remain compatible with this target structure.
+
+## Compromise Rules
+
+Allowed MVP compromises:
+
+- merge several backend modules into `app-core`;
+- implement only `language-java` first;
+- implement process runtime before Docker/remote;
+- generate C4 as Mermaid Markdown before rich UI;
+- use CLI git first before JGit if safer/faster;
+- keep agent-server in-process first.
+
+Not allowed:
+
+- UI controllers with business logic;
+- direct file writes outside `workspace-safety`;
+- hardcoded Java/Spring checks in generic graph core;
+- language plugins coupled to each other;
+- JPA entities in UI or prompts;
+- raw LLM calls outside `llm-gateway`;
+- migration without Liquibase XML;
+- custom coding tools instead of Spring AI Agent Utils without documented reason.
+
+
+
+
+================================================================================
+FILE: concept\README.md
+PATH: C:\projects\chatly-code\concept\README.md
+================================================================================
+
+# Chatly Code Concept
+
+Документы в этой папке описывают концепт локального desktop-продукта для агентной разработки.
+
+Продуктовая идея: локальная программа для разработчиков, которая открывает существующий проект, понимает его архитектуру, находит проблемы, создает задачи, строит C4-диаграммы и безопасно запускает AI-агента для исправлений через план, git-checkpoint, тесты и diff-review.
+
+## Структура документов
+
+- [01_product_vision.md](01_product_vision.md) - позиционирование, аудитория, ценность, отличие от OpenHands.
+- [02_business_path.md](02_business_path.md) - бизнес-путь продукта, рынок, монетизация, метрики.
+- [03_customer_journey.md](03_customer_journey.md) - пользовательский путь от первого запуска до регулярной работы.
+- [04_ux_ui_spec.md](04_ux_ui_spec.md) - интерфейс, экраны, навигация, UX-принципы.
+- [05_c4_architecture.md](05_c4_architecture.md) - C4-модель продукта: Context, Containers, Components, Code.
+- [06_system_architecture.md](06_system_architecture.md) - внутренняя архитектура модулей.
+- [07_agent_runtime.md](07_agent_runtime.md) - агентный цикл, tools, события, состояния задач.
+- [08_domain_model.md](08_domain_model.md) - ключевые доменные сущности.
+- [09_security_safety.md](09_security_safety.md) - безопасность, sandbox, approvals, secrets, rollback.
+- [10_roadmap.md](10_roadmap.md) - MVP, версии, коммерческий roadmap.
+- [11_engineering_principles.md](11_engineering_principles.md) - инженерные принципы и best practices.
+- [12_updates_distribution.md](12_updates_distribution.md) - упаковка, обновления, installer, release flow.
+- [13_code_graph_engine.md](13_code_graph_engine.md) - локальный deterministic code graph по модели CodeGraph: tree-sitter, SQLite, resolver, watcher, MCP/context tools.
+- [14_performance_targets.md](14_performance_targets.md) - performance targets, GraalVM, virtual threads, multi-agent concurrency, memory and UI responsiveness.
+- [15_technology_decisions.md](15_technology_decisions.md) - corporate stack decisions: Spring-first, Hibernate/JPA where appropriate, Lombok, MapStruct, Liquibase XML, Micrometer, no unnecessary custom frameworks.
+- [16_implementation_blueprint.md](16_implementation_blueprint.md) - practical implementation blueprint for AI-assisted development: modules, packages, MVP vertical slice, boundaries and acceptance criteria.
+- [17_interface_walkthrough.md](17_interface_walkthrough.md) - simple detailed product walkthrough: first launch, scan, architecture, problems, feature request, agent execution, review and rollback.
+- [18_openhands_parity_requirements.md](18_openhands_parity_requirements.md) - mandatory OpenHands-like baseline: file read/edit, command execution, process/docker/remote runtime, action/observation loop, conversation, terminal, git changes/diff and runtime services.
+- [19_mvp_scope_checklist.md](19_mvp_scope_checklist.md) - non-negotiable MVP checklist: project scan, code graph, architecture explorer, C4 draft, problems, task generator, graph-aware chat, agent MVP, workspace safety and minimal UI.
+- [20_domain_boundaries_and_language_plugins.md](20_domain_boundaries_and_language_plugins.md) - domain/subdomain boundaries, high cohesion/low coupling rules, ports/adapters and extractable language plugin architecture for Java/Rust/TypeScript-specific logic.
+- [21_project_structure.md](21_project_structure.md) - target Gradle multi-module project structure, package layout, module responsibilities and allowed MVP compromises.
+
+## Рекомендуемый стек
+
+- Java 25 LTS.
+- Spring Boot 4.
+- Spring Framework 7.
+- Spring AI 2.x или последняя стабильная Spring AI на момент сборки MVP.
+- Spring AI Agent Utils as the default foundation for coding-agent tools and subagent orchestration.
+- JavaFX 26.
+- Gradle as the mandatory build system.
+- GraalVM JDK as a serious runtime/build option; native-image is evaluated where compatible.
+- Virtual Threads.
+- Structured Concurrency там, где статус фичи позволяет использовать ее безопасно.
+- JSpecify null-safety.
+- SQLite.
+- Tree-sitter / AST extraction для локального code graph.
+- Docker / Podman.
+- MCP.
+- jpackage + install4j для production distribution.
+
+## Corporate Development Principle
+
+Use standard Spring/JVM ecosystem mechanisms before writing custom infrastructure:
+
+- Spring Boot auto-configuration instead of manual bootstrapping;
+- Spring `MessageSource` for i18n;
+- Spring AI Agent Utils for coding-agent tools instead of custom from-scratch tools;
+- Spring Data JPA/Hibernate for normal relational domain persistence;
+- Spring JDBC/JdbcClient for high-volume graph writes where JPA overhead is not appropriate;
+- Liquibase XML for migrations;
+- Lombok for safe boilerplate reduction;
+- MapStruct for mappings;
+- Micrometer for metrics;
+- SLF4J/Logback for logging.
+
+## Localization
+
+The product must support multiple UI languages from the beginning:
+
+- default language: English;
+- required second language: Russian;
+- all user-facing UI text must go through i18n keys;
+- Spring `MessageSource` is the canonical localization mechanism;
+- generated agent-facing technical prompts can stay English by default;
+- user-facing summaries, explanations and labels should follow the selected UI language.
+
+## Главный продуктовый принцип
+
+Пользователь не должен просить AI "попробуй починить проект". Пользователь должен видеть управляемый рабочий процесс:
+
+```text
+Открыть проект
+-> понять архитектуру
+-> увидеть проблемы
+-> выбрать задачу
+-> проверить план
+-> разрешить изменения
+-> увидеть diff и тесты
+-> принять или откатить
+```
+
+## Code Graph Principle
+
+Агент не должен сам бродить по проекту через бесконечные `grep` и чтение файлов. Приложение должно заранее построить локальный deterministic code graph:
+
+```text
+files
+-> AST extraction
+-> nodes / edges / files / unresolved references
+-> reference resolver
+-> framework-aware edges
+-> graph queries
+-> compact agent context
+```
+
+Этот слой строится без LLM и хранится локально в SQLite.
+
+
+

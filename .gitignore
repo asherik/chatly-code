@@ -1,4 +1,7 @@
-/.idea/
+.gradle/
+build/
+out/
+*.iml
+.idea/
+chatly-code.workspace/
 /examples/
-/concept/
-/rules/
