@@ -130,7 +130,7 @@ public final class ChatlyCodeFacade {
         OpenedProject project = projectScanner.open(projectRoot);
         CodeGraph graph = codeGraphIndexer.index(project, progressConsumer == null ? ignored -> {} : progressConsumer);
         var architecture = architectureAnalyzer.analyze(graph);
-        var problems = problemDetector.detect(graph);
+        var problems = problemDetector.detect(graph, project.root());
         var tasks = taskPlanner.fromProblems(problems).stream()
                 .map(task -> taskPlanner.enrichWithProjectCommands(task, project))
                 .toList();

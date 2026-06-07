@@ -68,6 +68,14 @@ public final class TaskPlanner {
             case HUGE_CLASS -> "Split oversized class by responsibility";
             case TOO_MANY_DEPENDENCIES -> "Reduce dependencies for " + problem.primaryPath().getFileName();
             case HIGH_BLAST_RADIUS -> "Add safety checks before changing high-impact type";
+            case SECRET_EXPOSURE -> "Move possible secret out of source code";
+            case PANIC_USAGE -> "Replace panic-style failure with typed error handling";
+            case DEBUG_ARTIFACT -> "Remove debug output from production path";
+            case BOUNDARY_VIOLATION -> "Fix suspicious cross-boundary dependency";
+            case DUMPING_GROUND -> "Split broad shared/types module";
+            case LARGE_FILE -> "Split large source file";
+            case LONG_FUNCTION -> "Extract long function steps";
+            case ASYNC_LOCK_HOTSPOT -> "Review lock scope in runtime path";
             default -> problem.title();
         };
     }
@@ -78,6 +86,14 @@ public final class TaskPlanner {
             case ENTITY_LEAK -> "Keep persistence entities inside the persistence boundary.";
             case HUGE_CLASS -> "Extract cohesive parts into dedicated types without behavior regressions.";
             case HIGH_BLAST_RADIUS -> "Document impact radius and ensure verification commands pass.";
+            case SECRET_EXPOSURE -> "Replace hardcoded sensitive values with environment or secret-store configuration.";
+            case PANIC_USAGE -> "Return recoverable errors in production paths and keep panics for impossible states only.";
+            case DEBUG_ARTIFACT -> "Remove temporary debug output or route it through structured logging.";
+            case BOUNDARY_VIOLATION -> "Restore dependency direction between UI, core, storage, and integration boundaries.";
+            case DUMPING_GROUND -> "Move declarations into domain-specific modules with clearer ownership.";
+            case LARGE_FILE -> "Extract cohesive responsibilities into smaller files.";
+            case LONG_FUNCTION -> "Split the function into named steps with focused tests.";
+            case ASYNC_LOCK_HOTSPOT -> "Minimize lock scope and avoid blocking work in async/runtime code.";
             default -> problem.description();
         };
     }

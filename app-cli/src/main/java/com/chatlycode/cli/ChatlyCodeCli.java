@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public final class ChatlyCodeCli {
 
@@ -60,6 +62,7 @@ public final class ChatlyCodeCli {
     private int scan(CliCommand command) {
         ProjectSession session = open(command);
         printProject(session);
+        printProblemSummary(session.problems());
         printProblems(session.problems(), command.intOption("limit", 5));
         printTasks(session.tasks(), command.intOption("limit", 5));
         return 0;
@@ -185,10 +188,29 @@ public final class ChatlyCodeCli {
         console.out("Top Problems");
         problems.stream().limit(limit).forEach(problem -> {
             console.out("- [" + problem.severity() + "] " + problem.title());
+            console.out("  at: " + problem.primaryPath() + ":" + problem.line());
             if (!problem.evidence().isEmpty()) {
                 console.out("  evidence: " + String.join("; ", problem.evidence()));
             }
         });
+    }
+
+    private void printProblemSummary(List<DetectedProblem> problems) {
+        if (problems.isEmpty()) {
+            return;
+        }
+        console.out("");
+        console.out("Problem Summary");
+        Map<String, Long> counts = problems.stream()
+                .collect(Collectors.groupingBy(
+                        problem -> problem.severity() + " " + problem.type(),
+                        java.util.LinkedHashMap::new,
+                        Collectors.counting()
+                ));
+        counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue(Comparator.reverseOrder()).thenComparing(Map.Entry.comparingByKey()))
+                .limit(16)
+                .forEach(entry -> console.out("- " + entry.getKey() + ": " + entry.getValue()));
     }
 
     private void printTasks(List<EngineeringTask> tasks, int limit) {
