@@ -2,6 +2,7 @@ package com.chatlycode.desktop.controller;
 
 import com.chatlycode.appserver.facade.ChatlyCodeFacade;
 import com.chatlycode.appserver.facade.ProjectSession;
+import com.chatlycode.desktop.architecture.ArchitectureDiagramView;
 import com.chatlycode.desktop.graph.CodeGraphProjectionService;
 import com.chatlycode.desktop.graph.GraphCanvas;
 import com.chatlycode.desktop.graph.GraphMode;
@@ -114,16 +115,27 @@ public final class MainController {
         addMetric(metrics, 3, text("dashboard.problems"), dashboard.problemsProperty().asString());
         addMetric(metrics, 4, text("dashboard.tasks"), dashboard.tasksProperty().asString());
 
-        TextArea mermaid = new TextArea();
-        mermaid.setEditable(false);
-        mermaid.textProperty().bind(dashboard.mermaidProperty());
-        VBox.setVgrow(mermaid, Priority.ALWAYS);
+        ArchitectureDiagramView architectureDiagram = new ArchitectureDiagramView();
+        architectureDiagram.setArchitecture(dashboard.architectureProperty().get());
+        dashboard.architectureProperty().addListener((obs, old, value) -> architectureDiagram.setArchitecture(value));
+
+        TextArea c4Source = new TextArea();
+        c4Source.setEditable(false);
+        c4Source.textProperty().bind(dashboard.c4SourceProperty());
+        c4Source.getStyleClass().add("c4-source");
+
+        TabPane architectureTabs = new TabPane(
+                new Tab(text("architecture.diagram"), architectureDiagram),
+                new Tab(text("architecture.source"), c4Source)
+        );
+        architectureTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        VBox.setVgrow(architectureTabs, Priority.ALWAYS);
 
         Label projectName = new Label();
         projectName.textProperty().bind(dashboard.projectNameProperty());
         projectName.getStyleClass().add("project-name");
 
-        VBox content = new VBox(12, projectName, metrics, mermaid);
+        VBox content = new VBox(12, projectName, metrics, architectureTabs);
         content.setPadding(new Insets(16));
         VBox.setVgrow(content, Priority.ALWAYS);
 

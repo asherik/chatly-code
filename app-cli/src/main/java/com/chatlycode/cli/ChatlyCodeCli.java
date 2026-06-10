@@ -174,9 +174,9 @@ public final class ChatlyCodeCli {
         console.out("nodes=" + session.architecture().nodeCount());
         console.out("edges=" + session.architecture().edgeCount());
         console.out("topPackages=" + session.architecture().topPackages());
-        if (!session.architecture().mermaidC4Draft().isBlank()) {
+        if (!session.architecture().structurizrDsl().isBlank()) {
             console.out("");
-            console.out(session.architecture().mermaidC4Draft());
+            console.out(session.architecture().structurizrDsl());
         }
     }
 

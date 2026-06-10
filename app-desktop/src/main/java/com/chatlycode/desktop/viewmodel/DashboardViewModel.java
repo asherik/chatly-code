@@ -1,8 +1,11 @@
 package com.chatlycode.desktop.viewmodel;
 
 import com.chatlycode.appserver.facade.DashboardSnapshot;
+import com.chatlycode.architecture.domain.ArchitectureSummary;
 import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
@@ -14,7 +17,8 @@ public final class DashboardViewModel {
     private final IntegerProperty edges = new SimpleIntegerProperty();
     private final IntegerProperty problems = new SimpleIntegerProperty();
     private final IntegerProperty tasks = new SimpleIntegerProperty();
-    private final StringProperty mermaid = new SimpleStringProperty("");
+    private final StringProperty c4Source = new SimpleStringProperty("");
+    private final ObjectProperty<ArchitectureSummary> architecture = new SimpleObjectProperty<>();
 
     public void apply(DashboardSnapshot snapshot) {
         projectName.set(snapshot.project().displayName());
@@ -23,7 +27,8 @@ public final class DashboardViewModel {
         edges.set(snapshot.architecture().edgeCount());
         problems.set(snapshot.problems().size());
         tasks.set(snapshot.tasks().size());
-        mermaid.set(snapshot.architecture().mermaidC4Draft());
+        architecture.set(snapshot.architecture());
+        c4Source.set(snapshot.architecture().structurizrDsl());
     }
 
     public StringProperty projectNameProperty() {
@@ -50,7 +55,11 @@ public final class DashboardViewModel {
         return tasks;
     }
 
-    public StringProperty mermaidProperty() {
-        return mermaid;
+    public StringProperty c4SourceProperty() {
+        return c4Source;
+    }
+
+    public ObjectProperty<ArchitectureSummary> architectureProperty() {
+        return architecture;
     }
 }
