@@ -242,12 +242,16 @@ public final class ArchitectureAnalyzer {
         try {
             StructurizrDslParser parser = new StructurizrDslParser();
             parser.parse(dsl);
-            applyManualLayout(parser.getWorkspace());
+            try {
+                applyManualLayout(parser.getWorkspace());
+            } catch (RuntimeException exception) {
+                // Keep the official Structurizr workspace renderable even if our layout pass misses an edge case.
+            }
             StringWriter writer = new StringWriter();
             new JsonWriter(true).write(parser.getWorkspace(), writer);
             return writer.toString();
         } catch (Exception exception) {
-            return "";
+            throw new IllegalStateException("Failed to parse generated Structurizr DSL: " + exception.getMessage(), exception);
         }
     }
 
@@ -422,15 +426,17 @@ public final class ArchitectureAnalyzer {
         Map<String, List<ComponentCandidate>> result = new LinkedHashMap<>();
         for (Map.Entry<String, List<CodeNode>> entry : nodesByModule.entrySet()) {
             Map<String, String> usedIds = new HashMap<>();
+            Map<String, Integer> usedNames = new HashMap<>();
             List<ComponentCandidate> candidates = entry.getValue().stream()
                     .sorted(Comparator.comparingInt(this::componentRank).thenComparing(CodeNode::qualifiedName))
                     .limit(9)
                     .map(node -> {
                         String id = uniqueId(sanitize(entry.getKey() + "_" + node.name()), usedIds);
                         usedIds.put(id, id);
+                        String name = uniqueComponentName(shortName(node.name()), usedNames);
                         return new ComponentCandidate(
                                 id,
-                                shortName(node.name()),
+                                name,
                                 componentDescription(node),
                                 componentTechnology(node)
                         );
@@ -439,6 +445,11 @@ public final class ArchitectureAnalyzer {
             result.put(entry.getKey(), candidates);
         }
         return result;
+    }
+
+    private String uniqueComponentName(String name, Map<String, Integer> usedNames) {
+        int count = usedNames.merge(name, 1, Integer::sum);
+        return count == 1 ? name : name + " " + count;
     }
 
     private boolean isComponentCandidate(CodeNode node) {

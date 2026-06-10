@@ -20,8 +20,12 @@ public final class ArchitectureDiagramView extends BorderPane {
 
     public void setArchitecture(ArchitectureSummary architecture) {
         WebEngine engine = webView.getEngine();
-        if (architecture == null || architecture.structurizrJson().isBlank()) {
+        if (architecture == null) {
             engine.loadContent(emptyHtml("Open a project to see the C4 architecture diagram."));
+            return;
+        }
+        if (architecture.structurizrJson().isBlank()) {
+            engine.loadContent(emptyHtml("C4 source was generated, but Structurizr JSON is empty. Open the C4 source tab to inspect the DSL."));
             return;
         }
         String structurizrUiBase = structurizrUiBase();

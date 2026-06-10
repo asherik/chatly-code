@@ -174,6 +174,7 @@ public final class ChatlyCodeCli {
         console.out("nodes=" + session.architecture().nodeCount());
         console.out("edges=" + session.architecture().edgeCount());
         console.out("topPackages=" + session.architecture().topPackages());
+        console.out("c4JsonBytes=" + session.architecture().structurizrJson().length());
         if (!session.architecture().structurizrDsl().isBlank()) {
             console.out("");
             console.out(session.architecture().structurizrDsl());
