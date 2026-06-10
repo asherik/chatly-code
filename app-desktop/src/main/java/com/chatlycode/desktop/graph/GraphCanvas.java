@@ -1,6 +1,7 @@
 package com.chatlycode.desktop.graph;
 
 import com.chatlycode.graph.domain.NodeKind;
+import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Point2D;
@@ -36,6 +37,7 @@ public final class GraphCanvas extends Pane {
     private final ObjectProperty<GraphVertex> selectedVertex = new SimpleObjectProperty<>();
     private GraphProjection projection = GraphProjection.empty();
     private double zoom = 1.0;
+    private boolean fitPending;
     private double panStartX;
     private double panStartY;
     private double translateStartX;
@@ -66,7 +68,7 @@ public final class GraphCanvas extends Pane {
         drawEdges();
         drawNodes();
         updateLabelVisibility();
-        centerIfEmpty();
+        fitToViewWhenReady();
     }
 
     public ObjectProperty<GraphVertex> selectedVertexProperty() {
@@ -74,11 +76,7 @@ public final class GraphCanvas extends Pane {
     }
 
     public void resetView() {
-        zoom = 1.0;
-        world.setScaleX(zoom);
-        world.setScaleY(zoom);
-        centerWorld();
-        updateLabelVisibility();
+        fitToViewWhenReady();
     }
 
     private void setupZoom() {
@@ -315,9 +313,54 @@ public final class GraphCanvas extends Pane {
     }
 
     private void centerIfEmpty() {
+        if (fitPending && !projection.vertices().isEmpty()) {
+            fitToViewWhenReady();
+            return;
+        }
         if (projection.vertices().isEmpty()) {
             centerWorld();
         }
+    }
+
+    private void fitToViewWhenReady() {
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            fitPending = true;
+            Platform.runLater(this::fitToViewWhenReady);
+            return;
+        }
+        fitPending = false;
+        if (projection.vertices().isEmpty()) {
+            centerWorld();
+            return;
+        }
+        Bounds2D bounds = graphBounds();
+        double availableWidth = Math.max(320, getWidth() - 96);
+        double availableHeight = Math.max(240, getHeight() - 96);
+        double scaleX = availableWidth / Math.max(1, bounds.width());
+        double scaleY = availableHeight / Math.max(1, bounds.height());
+        zoom = clamp(Math.min(scaleX, scaleY), MIN_ZOOM, 0.72);
+        world.setScaleX(zoom);
+        world.setScaleY(zoom);
+        world.setTranslateX((getWidth() - bounds.width() * zoom) / 2.0 - bounds.minX() * zoom);
+        world.setTranslateY((getHeight() - bounds.height() * zoom) / 2.0 - bounds.minY() * zoom);
+        updateLabelVisibility();
+    }
+
+    private Bounds2D graphBounds() {
+        double minX = Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
+        for (Point2D point : positions.values()) {
+            minX = Math.min(minX, point.getX());
+            minY = Math.min(minY, point.getY());
+            maxX = Math.max(maxX, point.getX());
+            maxY = Math.max(maxY, point.getY());
+        }
+        if (positions.isEmpty()) {
+            return new Bounds2D(0, 0, 1, 1);
+        }
+        return new Bounds2D(minX - 80, minY - 80, maxX + 220, maxY + 80);
     }
 
     private void centerWorld() {
@@ -346,5 +389,16 @@ public final class GraphCanvas extends Pane {
     }
 
     private record EdgeView(GraphLink link, Line line) {
+    }
+
+    private record Bounds2D(double minX, double minY, double maxX, double maxY) {
+
+        double width() {
+            return maxX - minX;
+        }
+
+        double height() {
+            return maxY - minY;
+        }
     }
 }
