@@ -2,6 +2,12 @@ package com.chatlycode.desktop.controller;
 
 import com.chatlycode.appserver.facade.ChatlyCodeFacade;
 import com.chatlycode.appserver.facade.ProjectSession;
+import com.chatlycode.desktop.graph.CodeGraphProjectionService;
+import com.chatlycode.desktop.graph.GraphCanvas;
+import com.chatlycode.desktop.graph.GraphMode;
+import com.chatlycode.desktop.graph.GraphProjection;
+import com.chatlycode.desktop.graph.GraphProjectionOptions;
+import com.chatlycode.desktop.graph.GraphVertex;
 import com.chatlycode.desktop.viewmodel.MainViewModel;
 import com.chatlycode.i18n.LocalizationService;
 import com.chatlycode.problem.domain.DetectedProblem;
@@ -11,9 +17,13 @@ import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Separator;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
@@ -35,6 +45,7 @@ public final class MainController {
     private final LocalizationService localization;
     private final Locale locale;
     private final MainViewModel viewModel = new MainViewModel();
+    private final CodeGraphProjectionService graphProjectionService = new CodeGraphProjectionService();
     private final BorderPane root = new BorderPane();
     private final Label status = new Label();
 
@@ -71,6 +82,7 @@ public final class MainController {
 
         TabPane tabs = new TabPane(
                 overviewTab(),
+                graphTab(),
                 problemsTab(),
                 tasksTab(),
                 agentRunTab(),
@@ -115,6 +127,108 @@ public final class MainController {
 
         Tab tab = new Tab(text("tab.overview"), content);
         return tab;
+    }
+
+    private Tab graphTab() {
+        GraphCanvas canvas = new GraphCanvas();
+        TextArea details = new TextArea();
+        details.setEditable(false);
+        details.setWrapText(true);
+        details.getStyleClass().add("graph-details");
+
+        TextField search = new TextField();
+        search.setPromptText(text("graph.search"));
+        ComboBox<GraphMode> mode = new ComboBox<>();
+        mode.getItems().setAll(GraphMode.values());
+        mode.getSelectionModel().select(GraphMode.ARCHITECTURE);
+
+        CheckBox methods = new CheckBox(text("graph.showMethods"));
+        CheckBox imports = new CheckBox(text("graph.showImports"));
+        CheckBox external = new CheckBox(text("graph.showExternal"));
+        external.setSelected(true);
+
+        Label summary = new Label(text("graph.empty"));
+        summary.getStyleClass().add("graph-summary");
+
+        final String[] focusedNodeId = {""};
+        Runnable refresh = () -> {
+            ProjectSession session = viewModel.sessionProperty().get();
+            if (session == null) {
+                canvas.setProjection(GraphProjection.empty());
+                details.setText(text("error.noProject"));
+                summary.setText(text("graph.empty"));
+                return;
+            }
+            GraphProjectionOptions options = new GraphProjectionOptions(
+                    mode.getSelectionModel().getSelectedItem(),
+                    methods.isSelected(),
+                    imports.isSelected(),
+                    external.isSelected(),
+                    search.getText(),
+                    focusedNodeId[0],
+                    350
+            );
+            GraphProjection projection = graphProjectionService.project(session.graph(), session.problems(), options);
+            canvas.setProjection(projection);
+            summary.setText(graphSummary(projection));
+            if (projection.truncated()) {
+                status.setText(text("graph.truncated"));
+            }
+        };
+
+        Button reset = new Button(text("graph.reset"));
+        reset.setOnAction(event -> {
+            focusedNodeId[0] = "";
+            search.clear();
+            mode.getSelectionModel().select(GraphMode.ARCHITECTURE);
+            methods.setSelected(false);
+            imports.setSelected(false);
+            external.setSelected(true);
+            canvas.resetView();
+            refresh.run();
+        });
+
+        Button focus = new Button(text("graph.focus"));
+        focus.setOnAction(event -> {
+            GraphVertex selected = canvas.selectedVertexProperty().get();
+            if (selected != null) {
+                focusedNodeId[0] = selected.id();
+                mode.getSelectionModel().select(GraphMode.IMPACT);
+                refresh.run();
+            }
+        });
+
+        search.textProperty().addListener((obs, old, value) -> {
+            focusedNodeId[0] = "";
+            refresh.run();
+        });
+        mode.valueProperty().addListener((obs, old, value) -> refresh.run());
+        methods.selectedProperty().addListener((obs, old, value) -> refresh.run());
+        imports.selectedProperty().addListener((obs, old, value) -> refresh.run());
+        external.selectedProperty().addListener((obs, old, value) -> refresh.run());
+        viewModel.sessionProperty().addListener((obs, old, value) -> refresh.run());
+        canvas.selectedVertexProperty().addListener((obs, old, selected) ->
+                details.setText(selected == null ? text("graph.noSelection") : vertexDetails(selected))
+        );
+
+        HBox filters = new HBox(8, search, mode, methods, imports, external, new Separator(), focus, reset, summary);
+        filters.getStyleClass().add("graph-toolbar");
+        filters.setPadding(new Insets(10));
+        HBox.setHgrow(search, Priority.ALWAYS);
+
+        VBox sidePanel = new VBox(8, new Label(text("graph.selection")), details);
+        sidePanel.getStyleClass().add("graph-side-panel");
+        sidePanel.setPadding(new Insets(12));
+        sidePanel.setPrefWidth(320);
+        VBox.setVgrow(details, Priority.ALWAYS);
+
+        SplitPane split = new SplitPane(canvas, sidePanel);
+        split.setDividerPositions(0.75);
+
+        BorderPane content = new BorderPane(split);
+        content.setTop(filters);
+        refresh.run();
+        return new Tab(text("tab.graph"), content);
     }
 
     private Tab problemsTab() {
@@ -375,6 +489,30 @@ public final class MainController {
         VBox box = new VBox(4, valueLabel, nameLabel);
         box.getStyleClass().add("metric");
         grid.add(box, column, 0);
+    }
+
+    private String graphSummary(GraphProjection projection) {
+        if (projection.vertices().isEmpty()) {
+            return text("graph.empty");
+        }
+        String suffix = projection.truncated() ? " / " + projection.availableNodes() : "";
+        return projection.vertices().size() + suffix + " " + text("graph.nodes")
+                + ", " + projection.links().size() + " " + text("graph.links");
+    }
+
+    private String vertexDetails(GraphVertex vertex) {
+        return String.join(
+                "\n",
+                vertex.qualifiedName(),
+                "",
+                text("graph.kind") + ": " + vertex.kind(),
+                text("graph.language") + ": " + vertex.language(),
+                text("graph.path") + ": " + vertex.filePath() + ":" + vertex.line(),
+                text("graph.problems") + ": " + vertex.problemCount(),
+                "",
+                text("graph.signature") + ":",
+                vertex.signature().isBlank() ? "-" : vertex.signature()
+        );
     }
 
     private void chooseAndScanProject() {
