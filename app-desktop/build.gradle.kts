@@ -10,7 +10,7 @@ dependencies {
 
 javafx {
     version = "21.0.6"
-    modules = listOf("javafx.controls")
+    modules = listOf("javafx.controls", "javafx.web")
 }
 
 application {

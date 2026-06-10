@@ -9,7 +9,8 @@ public record ArchitectureSummary(
         List<String> topPackages,
         List<ArchitectureContainer> containers,
         List<ArchitectureRelationship> relationships,
-        String structurizrDsl
+        String structurizrDsl,
+        String structurizrJson
 ) {
 
     public ArchitectureSummary {
@@ -17,6 +18,7 @@ public record ArchitectureSummary(
         containers = List.copyOf(containers == null ? List.of() : containers);
         relationships = List.copyOf(relationships == null ? List.of() : relationships);
         structurizrDsl = structurizrDsl == null ? "" : structurizrDsl;
+        structurizrJson = structurizrJson == null ? "" : structurizrJson;
     }
 
     public String mermaidC4Draft() {

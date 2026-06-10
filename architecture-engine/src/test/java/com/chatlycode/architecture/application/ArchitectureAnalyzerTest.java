@@ -49,8 +49,11 @@ final class ArchitectureAnalyzerTest {
         assertTrue(summary.structurizrDsl().contains("shape Person"));
         assertTrue(summary.structurizrDsl().contains("shape Cylinder"));
         assertTrue(summary.structurizrDsl().contains("scope softwareSystem"));
-        assertTrue(summary.structurizrDsl().contains("desktop_src_main -> core_src_storage \"Depends on\" \"edges: 1\""));
+        assertTrue(summary.structurizrDsl().contains("desktop_src_main -> core_src_storage \"Depends on\""));
+        assertTrue(summary.structurizrDsl().contains("component desktop_src_main \"Components_desktop_src_main\""));
         assertFalse(summary.structurizrDsl().contains("!identifiers hierarchical"));
+        assertFalse(summary.structurizrJson().isBlank());
+        assertTrue(summary.structurizrJson().contains("\"key\" : \"Containers\""));
     }
 
     private static CodeNode node(String id, String name, String path) {

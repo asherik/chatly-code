@@ -1,151 +1,162 @@
 package com.chatlycode.desktop.architecture;
 
-import com.chatlycode.architecture.domain.ArchitectureContainer;
-import com.chatlycode.architecture.domain.ArchitectureRelationship;
 import com.chatlycode.architecture.domain.ArchitectureSummary;
-import javafx.geometry.Insets;
-import javafx.geometry.Point2D;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.layout.Pane;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
-import javafx.scene.shape.Line;
-import javafx.scene.shape.Polygon;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.web.WebEngine;
+import javafx.scene.web.WebView;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
-public final class ArchitectureDiagramView extends ScrollPane {
+public final class ArchitectureDiagramView extends BorderPane {
 
-    private static final double CARD_WIDTH = 230;
-    private static final double CARD_HEIGHT = 96;
-    private static final double GAP_X = 48;
-    private static final double GAP_Y = 34;
-    private static final double SYSTEM_X = 250;
-    private static final double SYSTEM_Y = 46;
-
-    private final Pane canvas = new Pane();
+    private final WebView webView = new WebView();
 
     public ArchitectureDiagramView() {
-        getStyleClass().add("architecture-scroll");
-        setFitToWidth(false);
-        setFitToHeight(false);
-        setContent(canvas);
-        setArchitecture(null);
+        getStyleClass().add("architecture-web-view");
+        setCenter(webView);
     }
 
     public void setArchitecture(ArchitectureSummary architecture) {
-        canvas.getChildren().clear();
-        if (architecture == null || architecture.containers().isEmpty()) {
-            Label empty = new Label("Open a project to see the C4 architecture diagram");
-            empty.getStyleClass().add("architecture-empty");
-            empty.relocate(24, 24);
-            canvas.getChildren().add(empty);
-            canvas.setPrefSize(720, 360);
+        WebEngine engine = webView.getEngine();
+        if (architecture == null || architecture.structurizrJson().isBlank()) {
+            engine.loadContent(emptyHtml("Open a project to see the C4 architecture diagram."));
             return;
         }
+        String structurizrUiBase = structurizrUiBase();
+        String workspaceJson = Base64.getEncoder().encodeToString(architecture.structurizrJson().getBytes(StandardCharsets.UTF_8));
+        engine.loadContent(diagramHtml(structurizrUiBase, workspaceJson), "text/html");
+    }
 
-        int columns = Math.min(3, Math.max(1, architecture.containers().size()));
-        int rows = (int) Math.ceil(architecture.containers().size() / (double) columns);
-        double systemWidth = columns * CARD_WIDTH + (columns + 1) * GAP_X;
-        double systemHeight = rows * CARD_HEIGHT + (rows + 1) * GAP_Y + 48;
-        double canvasWidth = SYSTEM_X + systemWidth + 80;
-        double canvasHeight = Math.max(420, SYSTEM_Y + systemHeight + 60);
-
-        StackPane system = new StackPane();
-        system.getStyleClass().add("architecture-system");
-        system.resizeRelocate(SYSTEM_X, SYSTEM_Y, systemWidth, systemHeight);
-
-        Label systemTitle = new Label("Software system");
-        systemTitle.getStyleClass().add("architecture-system-title");
-        systemTitle.relocate(SYSTEM_X + 18, SYSTEM_Y + 14);
-
-        StackPane user = architectureNode("Developer", "Maintains and evolves", "", "Person");
-        user.getStyleClass().add("architecture-person");
-        user.resizeRelocate(34, SYSTEM_Y + systemHeight / 2 - CARD_HEIGHT / 2, 170, CARD_HEIGHT);
-
-        canvas.getChildren().addAll(system, systemTitle, user);
-
-        Map<String, StackPane> nodesById = new LinkedHashMap<>();
-        for (int index = 0; index < architecture.containers().size(); index++) {
-            ArchitectureContainer container = architecture.containers().get(index);
-            int column = index % columns;
-            int row = index / columns;
-            double x = SYSTEM_X + GAP_X + column * (CARD_WIDTH + GAP_X);
-            double y = SYSTEM_Y + GAP_Y + 48 + row * (CARD_HEIGHT + GAP_Y);
-            StackPane node = architectureNode(container.name(), container.description(), container.technology(), container.tag());
-            node.resizeRelocate(x, y, CARD_WIDTH, CARD_HEIGHT);
-            nodesById.put(container.id(), node);
+    private String structurizrUiBase() {
+        URL resource = ArchitectureDiagramView.class.getResource("/structurizr-ui/");
+        if (resource == null) {
+            throw new IllegalStateException("Structurizr UI resources are missing");
         }
-
-        drawRelationship(centerRight(user), new Point2D(SYSTEM_X, SYSTEM_Y + systemHeight / 2), "Inspects");
-        for (ArchitectureRelationship relationship : architecture.relationships()) {
-            StackPane source = nodesById.get(relationship.sourceId());
-            StackPane target = nodesById.get(relationship.targetId());
-            if (source != null && target != null) {
-                drawRelationship(center(source), center(target), relationship.description());
-            }
-        }
-
-        canvas.getChildren().addAll(nodesById.values());
-        canvas.setPrefSize(canvasWidth, canvasHeight);
+        return resource.toExternalForm();
     }
 
-    private StackPane architectureNode(String title, String description, String technology, String tag) {
-        Label titleLabel = new Label(title);
-        titleLabel.getStyleClass().add("architecture-node-title");
-        titleLabel.setWrapText(true);
-        titleLabel.setMaxWidth(CARD_WIDTH - 24);
+    private String diagramHtml(String structurizrUiBase, String workspaceJsonBase64) {
+        return """
+                <!doctype html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <script src="%1$sjs/jquery-3.6.3.min.js"></script>
+                    <script src="%1$sjs/lodash-4.17.21.js"></script>
+                    <script src="%1$sjs/backbone-1.4.1.js"></script>
+                    <script src="%1$sjs/joint-3.6.5.js"></script>
+                    <script src="%1$sjs/structurizr.js"></script>
+                    <script src="%1$sjs/structurizr-util.js"></script>
+                    <script src="%1$sjs/structurizr-ui.js"></script>
+                    <script src="%1$sjs/structurizr-workspace.js"></script>
+                    <script src="%1$sjs/structurizr-diagram.js"></script>
+                    <link href="%1$scss/joint-3.6.5.css" rel="stylesheet">
+                    <link href="%1$scss/structurizr.css" rel="stylesheet">
+                    <style>
+                        html, body { margin: 0; width: 100%%; height: 100%%; overflow: hidden; font-family: Arial, sans-serif; }
+                        #diagram { position: absolute; inset: 0 0 46px 0; background: #ffffff; }
+                        #toolbar {
+                            position: absolute; left: 0; right: 0; bottom: 0; height: 46px;
+                            display: flex; align-items: center; gap: 8px; padding: 0 12px;
+                            border-top: 1px solid #d7dce3; background: rgba(255, 255, 255, 0.96);
+                        }
+                        button {
+                            width: 32px; height: 28px; border: 1px solid #cfd6e0; border-radius: 4px;
+                            background: #ffffff; color: #263244; font-size: 16px; cursor: pointer;
+                        }
+                        button:hover { background: #f2f6fb; }
+                        select {
+                            height: 28px; max-width: 360px; border: 1px solid #cfd6e0; border-radius: 4px;
+                            background: #ffffff; color: #263244; font-size: 12px;
+                        }
+                        #title { margin-left: 8px; color: #334155; font-size: 12px; white-space: nowrap; }
+                        #error { padding: 18px; color: #9f1239; font-size: 13px; }
+                    </style>
+                </head>
+                <body>
+                    <div id="diagram"></div>
+                    <div id="toolbar">
+                        <button id="zoomOutButton" title="Zoom out">-</button>
+                        <button id="zoomInButton" title="Zoom in">+</button>
+                        <button id="fitButton" title="Fit content">Fit</button>
+                        <select id="viewSelector" title="C4 view"></select>
+                        <span id="title">Structurizr C4 View</span>
+                    </div>
+                    <script>
+                        function decodeUtf8Base64(value) {
+                            const binary = window.atob(value);
+                            if (window.TextDecoder) {
+                                const bytes = new Uint8Array(binary.length);
+                                for (let i = 0; i < binary.length; i++) {
+                                    bytes[i] = binary.charCodeAt(i);
+                                }
+                                return new TextDecoder('utf-8').decode(bytes);
+                            }
+                            return decodeURIComponent(escape(binary));
+                        }
 
-        Label descriptionLabel = new Label(description);
-        descriptionLabel.getStyleClass().add("architecture-node-description");
-        descriptionLabel.setWrapText(true);
-        descriptionLabel.setMaxWidth(CARD_WIDTH - 24);
+                        try {
+                            const json = decodeUtf8Base64('%2$s');
+                            structurizr.workspace = new structurizr.Workspace(JSON.parse(json));
+                            const viewSelector = $('#viewSelector');
+                            const views = [];
+                            structurizr.workspace.getViews().forEach(function(view) {
+                                if (view.type === 'SystemContext' || view.type === 'Container' || view.type === 'Component') {
+                                    views.push(view);
+                                }
+                            });
+                            views.sort(function(a, b) {
+                                const order = { SystemContext: 1, Container: 2, Component: 3 };
+                                return (order[a.type] || 9) - (order[b.type] || 9) || a.key.localeCompare(b.key);
+                            });
+                            views.forEach(function(view) {
+                                const label = view.type + ': ' + (view.title || view.name || view.key);
+                                viewSelector.append($('<option></option>').attr('value', view.key).text(label));
+                            });
 
-        Label technologyLabel = new Label(technology);
-        technologyLabel.getStyleClass().add("architecture-node-technology");
-        technologyLabel.setWrapText(true);
-        technologyLabel.setMaxWidth(CARD_WIDTH - 24);
-
-        VBox labels = new VBox(4, titleLabel, descriptionLabel, technologyLabel);
-        labels.setPadding(new Insets(10, 12, 10, 12));
-
-        StackPane node = new StackPane(labels);
-        node.getStyleClass().add("architecture-node");
-        if (!tag.isBlank()) {
-            node.getStyleClass().add("architecture-node-" + tag.toLowerCase());
-        }
-        return node;
+                            const diagram = new structurizr.ui.Diagram('diagram', false, function() {
+                                const initial = structurizr.workspace.findViewByKey('Containers') ? 'Containers' : (views[0] ? views[0].key : undefined);
+                                if (initial) {
+                                    viewSelector.val(initial);
+                                    diagram.changeView(initial);
+                                    window.setTimeout(function() { diagram.zoomFitContent(); }, 300);
+                                }
+                            });
+                            $('#zoomOutButton').click(diagram.zoomOut);
+                            $('#zoomInButton').click(diagram.zoomIn);
+                            $('#fitButton').click(diagram.zoomFitContent);
+                            viewSelector.change(function() {
+                                diagram.changeView($(this).val(), function() {
+                                    window.setTimeout(function() { diagram.zoomFitContent(); }, 150);
+                                });
+                            });
+                        } catch (error) {
+                            document.body.innerHTML = '<div id="error">Structurizr viewer failed: ' + error + '</div>';
+                        }
+                    </script>
+                </body>
+                </html>
+                """.formatted(structurizrUiBase, workspaceJsonBase64);
     }
 
-    private void drawRelationship(Point2D source, Point2D target, String labelText) {
-        Line line = new Line(source.getX(), source.getY(), target.getX(), target.getY());
-        line.getStyleClass().add("architecture-link");
-
-        double angle = Math.atan2(target.getY() - source.getY(), target.getX() - source.getX());
-        double arrowLength = 10;
-        double arrowWidth = 5;
-        Polygon arrow = new Polygon(
-                target.getX(), target.getY(),
-                target.getX() - arrowLength * Math.cos(angle) + arrowWidth * Math.sin(angle),
-                target.getY() - arrowLength * Math.sin(angle) - arrowWidth * Math.cos(angle),
-                target.getX() - arrowLength * Math.cos(angle) - arrowWidth * Math.sin(angle),
-                target.getY() - arrowLength * Math.sin(angle) + arrowWidth * Math.cos(angle)
-        );
-        arrow.getStyleClass().add("architecture-arrow");
-
-        Label label = new Label(labelText);
-        label.getStyleClass().add("architecture-link-label");
-        label.relocate((source.getX() + target.getX()) / 2 - 34, (source.getY() + target.getY()) / 2 - 16);
-        canvas.getChildren().addAll(line, arrow, label);
+    private String emptyHtml(String message) {
+        return """
+                <!doctype html>
+                <html>
+                <body style="margin:0;font-family:Arial,sans-serif;background:#f7f9fc;color:#5b6472;">
+                    <div style="padding:18px;font-size:13px;">%s</div>
+                </body>
+                </html>
+                """.formatted(escapeHtml(message));
     }
 
-    private Point2D center(StackPane node) {
-        return new Point2D(node.getLayoutX() + node.getWidth() / 2, node.getLayoutY() + node.getHeight() / 2);
-    }
-
-    private Point2D centerRight(StackPane node) {
-        return new Point2D(node.getLayoutX() + node.getWidth(), node.getLayoutY() + node.getHeight() / 2);
+    private String escapeHtml(String value) {
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 }
