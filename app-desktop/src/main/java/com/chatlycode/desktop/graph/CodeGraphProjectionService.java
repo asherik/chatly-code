@@ -1,6 +1,7 @@
 package com.chatlycode.desktop.graph;
 
 import com.chatlycode.graph.domain.CodeEdge;
+import com.chatlycode.graph.domain.CodeFile;
 import com.chatlycode.graph.domain.CodeGraph;
 import com.chatlycode.graph.domain.CodeNode;
 import com.chatlycode.graph.domain.EdgeKind;
@@ -62,15 +63,17 @@ public final class CodeGraphProjectionService {
 
         GraphProjectionOptions effectiveOptions = options == null ? GraphProjectionOptions.defaults() : options;
         Map<Path, List<DetectedProblem>> problemsByPath = problemsByPath(problems);
+        Map<Path, List<DetectedProblem>> visibleProblemsByPath = visibleProblemsByPath(problemsByPath, effectiveOptions.problemFilter());
+        Set<Path> projectFiles = projectFiles(graph);
         Map<String, CodeNode> nodesById = graph.nodes().stream()
                 .collect(Collectors.toMap(CodeNode::id, node -> node, (first, ignored) -> first, LinkedHashMap::new));
 
-        Set<String> selectedIds = selectNodeIds(graph, nodesById, problemsByPath, effectiveOptions);
+        Set<String> selectedIds = selectNodeIds(graph, nodesById, visibleProblemsByPath, projectFiles, effectiveOptions);
         int available = selectedIds.size();
         boolean truncated = selectedIds.size() > effectiveOptions.maxNodes();
         if (truncated) {
             selectedIds = selectedIds.stream()
-                    .sorted((left, right) -> nodeComparator(problemsByPath).compare(nodesById.get(left), nodesById.get(right)))
+                    .sorted((left, right) -> nodeComparator(visibleProblemsByPath).compare(nodesById.get(left), nodesById.get(right)))
                     .limit(effectiveOptions.maxNodes())
                     .collect(Collectors.toCollection(LinkedHashSet::new));
         }
@@ -86,7 +89,7 @@ public final class CodeGraphProjectionService {
         List<GraphVertex> vertices = selectedIds.stream()
                 .map(nodesById::get)
                 .filter(node -> node != null)
-                .map(node -> toVertex(node, problemsByPath))
+                .map(node -> toVertex(node, visibleProblemsByPath))
                 .toList();
 
         return new GraphProjection(vertices, links, truncated, available);
@@ -96,21 +99,36 @@ public final class CodeGraphProjectionService {
             CodeGraph graph,
             Map<String, CodeNode> nodesById,
             Map<Path, List<DetectedProblem>> problemsByPath,
-            GraphProjectionOptions options
+            Set<Path> projectFiles,
+        GraphProjectionOptions options
     ) {
         if (!options.focusNodeId().isBlank() && nodesById.containsKey(options.focusNodeId())) {
-            return focusedIds(graph, options.focusNodeId(), options.mode() == GraphMode.IMPACT ? 2 : 1);
+            Set<String> focused = focusedIds(graph, options.focusNodeId(), options.mode() == GraphMode.IMPACT ? 2 : 1);
+            if (!options.projectOnly()) {
+                return focused;
+            }
+            return focused.stream()
+                    .filter(id -> {
+                        CodeNode node = nodesById.get(id);
+                        return node != null && nodeAllowed(node, options) && isProjectNode(node, projectFiles, options);
+                    })
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
         }
 
         Set<String> ids = graph.nodes().stream()
+                .filter(node -> isProjectNode(node, projectFiles, options))
                 .filter(node -> nodeAllowed(node, options))
+                .filter(node -> matchesProblemFilter(node, problemsByPath, options.problemFilter()))
                 .filter(node -> matchesSearch(node, options.searchText()) || pathHasProblem(node, problemsByPath))
                 .sorted(nodeComparator(problemsByPath))
                 .map(CodeNode::id)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         if (!options.searchText().isBlank()) {
-            ids.addAll(neighborIds(graph, ids, 1));
+            ids.addAll(filteredNeighborIds(graph, ids, nodesById, projectFiles, options));
+        }
+        if (options.problemFilter() != GraphProblemFilter.ALL) {
+            ids.addAll(filteredNeighborIds(graph, ids, nodesById, projectFiles, options));
         }
         return ids;
     }
@@ -150,7 +168,25 @@ public final class CodeGraphProjectionService {
         return result;
     }
 
+    private Set<String> filteredNeighborIds(
+            CodeGraph graph,
+            Set<String> ids,
+            Map<String, CodeNode> nodesById,
+            Set<Path> projectFiles,
+            GraphProjectionOptions options
+    ) {
+        return neighborIds(graph, ids, 1).stream()
+                .filter(id -> {
+                    CodeNode node = nodesById.get(id);
+                    return node != null && isProjectNode(node, projectFiles, options) && nodeAllowed(node, options);
+                })
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
     private boolean nodeAllowed(CodeNode node, GraphProjectionOptions options) {
+        if (!options.projectOnly() && (IMPORT_KINDS.contains(node.kind()) || node.kind() == NodeKind.EXTERNAL_SERVICE)) {
+            return true;
+        }
         if (options.mode() == GraphMode.FILES) {
             return node.kind() == NodeKind.FILE || ARCHITECTURE_KINDS.contains(node.kind());
         }
@@ -170,6 +206,9 @@ public final class CodeGraphProjectionService {
     }
 
     private boolean edgeAllowed(CodeEdge edge, GraphProjectionOptions options) {
+        if (!options.projectOnly() && (edge.kind() == EdgeKind.IMPORTS || edge.kind() == EdgeKind.EXPORTS)) {
+            return true;
+        }
         if (options.mode() == GraphMode.FILES) {
             return edge.kind() == EdgeKind.CONTAINS;
         }
@@ -218,7 +257,8 @@ public final class CodeGraphProjectionService {
                 node.language(),
                 node.line(),
                 node.signature(),
-                problemCount(node, problemsByPath)
+                problemCount(node, problemsByPath),
+                problemSummaries(node, problemsByPath)
         );
     }
 
@@ -238,8 +278,24 @@ public final class CodeGraphProjectionService {
         return pathProblems.size();
     }
 
+    private List<String> problemSummaries(CodeNode node, Map<Path, List<DetectedProblem>> problemsByPath) {
+        return problemsByPath.getOrDefault(node.filePath(), List.of()).stream()
+                .map(problem -> "[" + problem.severity() + "] " + problem.title()
+                        + (problem.line() > 0 ? " :" + problem.line() : ""))
+                .toList();
+    }
+
     private boolean pathHasProblem(CodeNode node, Map<Path, List<DetectedProblem>> problemsByPath) {
         return problemsByPath.containsKey(node.filePath());
+    }
+
+    private boolean matchesProblemFilter(
+            CodeNode node,
+            Map<Path, List<DetectedProblem>> problemsByPath,
+            GraphProblemFilter problemFilter
+    ) {
+        return problemFilter == GraphProblemFilter.ALL
+                || !problemsByPath.getOrDefault(node.filePath(), List.of()).isEmpty();
     }
 
     private Map<Path, List<DetectedProblem>> problemsByPath(List<DetectedProblem> problems) {
@@ -253,5 +309,44 @@ public final class CodeGraphProjectionService {
             }
         }
         return result;
+    }
+
+    private Map<Path, List<DetectedProblem>> visibleProblemsByPath(
+            Map<Path, List<DetectedProblem>> problemsByPath,
+            GraphProblemFilter problemFilter
+    ) {
+        if (problemFilter == GraphProblemFilter.ALL) {
+            return problemsByPath;
+        }
+        Map<Path, List<DetectedProblem>> result = new LinkedHashMap<>();
+        for (Map.Entry<Path, List<DetectedProblem>> entry : problemsByPath.entrySet()) {
+            List<DetectedProblem> filtered = entry.getValue().stream()
+                    .filter(problem -> problem.severity() == problemFilter.severity())
+                    .toList();
+            if (!filtered.isEmpty()) {
+                result.put(entry.getKey(), filtered);
+            }
+        }
+        return result;
+    }
+
+    private Set<Path> projectFiles(CodeGraph graph) {
+        return graph.files().stream()
+                .map(CodeFile::relativePath)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private boolean isProjectOwned(CodeNode node, Set<Path> projectFiles) {
+        return projectFiles.contains(node.filePath());
+    }
+
+    private boolean isProjectNode(CodeNode node, Set<Path> projectFiles, GraphProjectionOptions options) {
+        if (!options.projectOnly()) {
+            return true;
+        }
+        return isProjectOwned(node, projectFiles)
+                && node.kind() != NodeKind.IMPORT
+                && node.kind() != NodeKind.EXPORT
+                && node.kind() != NodeKind.EXTERNAL_SERVICE;
     }
 }

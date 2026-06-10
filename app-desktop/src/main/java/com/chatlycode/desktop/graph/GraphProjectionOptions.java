@@ -5,6 +5,8 @@ public record GraphProjectionOptions(
         boolean showMethods,
         boolean showImports,
         boolean showExternal,
+        boolean projectOnly,
+        GraphProblemFilter problemFilter,
         String searchText,
         String focusNodeId,
         int maxNodes
@@ -12,12 +14,13 @@ public record GraphProjectionOptions(
 
     public GraphProjectionOptions {
         mode = mode == null ? GraphMode.ARCHITECTURE : mode;
+        problemFilter = problemFilter == null ? GraphProblemFilter.ALL : problemFilter;
         searchText = searchText == null ? "" : searchText.trim();
         focusNodeId = focusNodeId == null ? "" : focusNodeId;
         maxNodes = maxNodes <= 0 ? 350 : maxNodes;
     }
 
     public static GraphProjectionOptions defaults() {
-        return new GraphProjectionOptions(GraphMode.ARCHITECTURE, false, false, true, "", "", 350);
+        return new GraphProjectionOptions(GraphMode.ARCHITECTURE, false, false, true, true, GraphProblemFilter.ALL, "", "", 350);
     }
 }

@@ -5,6 +5,7 @@ import com.chatlycode.appserver.facade.ProjectSession;
 import com.chatlycode.desktop.graph.CodeGraphProjectionService;
 import com.chatlycode.desktop.graph.GraphCanvas;
 import com.chatlycode.desktop.graph.GraphMode;
+import com.chatlycode.desktop.graph.GraphProblemFilter;
 import com.chatlycode.desktop.graph.GraphProjection;
 import com.chatlycode.desktop.graph.GraphProjectionOptions;
 import com.chatlycode.desktop.graph.GraphVertex;
@@ -28,6 +29,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.util.StringConverter;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -141,11 +143,27 @@ public final class MainController {
         ComboBox<GraphMode> mode = new ComboBox<>();
         mode.getItems().setAll(GraphMode.values());
         mode.getSelectionModel().select(GraphMode.ARCHITECTURE);
+        ComboBox<GraphProblemFilter> problemFilter = new ComboBox<>();
+        problemFilter.getItems().setAll(GraphProblemFilter.values());
+        problemFilter.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(GraphProblemFilter value) {
+                return value == null ? "" : text("graph.problemFilter." + value.name().toLowerCase(Locale.ROOT));
+            }
+
+            @Override
+            public GraphProblemFilter fromString(String value) {
+                return GraphProblemFilter.ALL;
+            }
+        });
+        problemFilter.getSelectionModel().select(GraphProblemFilter.ALL);
 
         CheckBox methods = new CheckBox(text("graph.showMethods"));
         CheckBox imports = new CheckBox(text("graph.showImports"));
         CheckBox external = new CheckBox(text("graph.showExternal"));
         external.setSelected(true);
+        CheckBox projectOnly = new CheckBox(text("graph.projectOnly"));
+        projectOnly.setSelected(true);
 
         Label summary = new Label(text("graph.empty"));
         summary.getStyleClass().add("graph-summary");
@@ -164,6 +182,8 @@ public final class MainController {
                     methods.isSelected(),
                     imports.isSelected(),
                     external.isSelected(),
+                    projectOnly.isSelected(),
+                    problemFilter.getSelectionModel().getSelectedItem(),
                     search.getText(),
                     focusedNodeId[0],
                     350
@@ -184,6 +204,8 @@ public final class MainController {
             methods.setSelected(false);
             imports.setSelected(false);
             external.setSelected(true);
+            projectOnly.setSelected(true);
+            problemFilter.getSelectionModel().select(GraphProblemFilter.ALL);
             canvas.resetView();
             refresh.run();
         });
@@ -206,12 +228,15 @@ public final class MainController {
         methods.selectedProperty().addListener((obs, old, value) -> refresh.run());
         imports.selectedProperty().addListener((obs, old, value) -> refresh.run());
         external.selectedProperty().addListener((obs, old, value) -> refresh.run());
+        projectOnly.selectedProperty().addListener((obs, old, value) -> refresh.run());
+        problemFilter.valueProperty().addListener((obs, old, value) -> refresh.run());
         viewModel.sessionProperty().addListener((obs, old, value) -> refresh.run());
         canvas.selectedVertexProperty().addListener((obs, old, selected) ->
                 details.setText(selected == null ? text("graph.noSelection") : vertexDetails(selected))
         );
 
-        HBox filters = new HBox(8, search, mode, methods, imports, external, new Separator(), focus, reset, summary);
+        Label problemFilterLabel = new Label(text("graph.problemFilter"));
+        HBox filters = new HBox(8, search, mode, problemFilterLabel, problemFilter, methods, imports, external, projectOnly, new Separator(), focus, reset, summary);
         filters.getStyleClass().add("graph-toolbar");
         filters.setPadding(new Insets(10));
         HBox.setHgrow(search, Priority.ALWAYS);
@@ -501,6 +526,9 @@ public final class MainController {
     }
 
     private String vertexDetails(GraphVertex vertex) {
+        String problems = vertex.problems().isEmpty()
+                ? "-"
+                : String.join("\n", vertex.problems());
         return String.join(
                 "\n",
                 vertex.qualifiedName(),
@@ -509,6 +537,7 @@ public final class MainController {
                 text("graph.language") + ": " + vertex.language(),
                 text("graph.path") + ": " + vertex.filePath() + ":" + vertex.line(),
                 text("graph.problems") + ": " + vertex.problemCount(),
+                problems,
                 "",
                 text("graph.signature") + ":",
                 vertex.signature().isBlank() ? "-" : vertex.signature()
