@@ -177,7 +177,10 @@ public final class ArchitectureDiagramView extends BorderPane {
 
                             function fitDiagram() {
                                 window.setTimeout(function() { diagram.zoomFitContent(); }, 120);
-                                window.setTimeout(function() { diagram.zoomFitContent(); }, 420);
+                                window.setTimeout(function() {
+                                    diagram.zoomFitContent();
+                                    diagram.zoomOut();
+                                }, 420);
                                 window.setTimeout(function() {
                                     $('.structurizrDiagramTitle,.structurizrDiagramDescription,.structurizrDiagramMetadata').hide();
                                 }, 520);

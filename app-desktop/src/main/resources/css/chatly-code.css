@@ -32,6 +32,24 @@
     -fx-background-radius: 12;
 }
 
+.toolbar-project-summary {
+    -fx-alignment: center-left;
+    -fx-padding: 0 0 0 8;
+}
+
+.toolbar-project-name {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #20242c;
+    -fx-padding: 2 10 2 0;
+}
+
+.toolbar-metric {
+    -fx-font-size: 11px;
+    -fx-text-fill: #5b6472;
+    -fx-padding: 2 0;
+}
+
 .project-name {
     -fx-font-size: 16px;
     -fx-font-weight: 600;

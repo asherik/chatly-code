@@ -15,6 +15,7 @@ import com.chatlycode.i18n.LocalizationService;
 import com.chatlycode.problem.domain.DetectedProblem;
 import com.chatlycode.task.domain.EngineeringTask;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.Parent;
@@ -79,7 +80,8 @@ public final class MainController {
         llm.textProperty().bind(viewModel.llmStatusProperty());
         llm.getStyleClass().add("llm-status");
 
-        HBox toolbar = new HBox(12, title, openProject, branch, llm);
+        HBox projectSummary = compactProjectSummary();
+        HBox toolbar = new HBox(12, title, openProject, branch, llm, projectSummary);
         toolbar.getStyleClass().add("toolbar");
         toolbar.setPadding(new Insets(12));
 
@@ -104,16 +106,7 @@ public final class MainController {
     }
 
     private Tab overviewTab() {
-        GridPane metrics = new GridPane();
-        metrics.getStyleClass().add("metrics");
-        metrics.setHgap(8);
-        metrics.setVgap(6);
         var dashboard = viewModel.dashboard();
-        addMetric(metrics, 0, text("dashboard.files"), dashboard.filesProperty().asString());
-        addMetric(metrics, 1, text("dashboard.nodes"), dashboard.nodesProperty().asString());
-        addMetric(metrics, 2, text("dashboard.edges"), dashboard.edgesProperty().asString());
-        addMetric(metrics, 3, text("dashboard.problems"), dashboard.problemsProperty().asString());
-        addMetric(metrics, 4, text("dashboard.tasks"), dashboard.tasksProperty().asString());
 
         ArchitectureDiagramView architectureDiagram = new ArchitectureDiagramView();
         architectureDiagram.setArchitecture(dashboard.architectureProperty().get());
@@ -131,16 +124,40 @@ public final class MainController {
         architectureTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         VBox.setVgrow(architectureTabs, Priority.ALWAYS);
 
-        Label projectName = new Label();
-        projectName.textProperty().bind(dashboard.projectNameProperty());
-        projectName.getStyleClass().add("project-name");
-
-        VBox content = new VBox(8, projectName, metrics, architectureTabs);
-        content.setPadding(new Insets(10, 16, 10, 16));
+        VBox content = new VBox(0, architectureTabs);
+        content.setPadding(new Insets(0, 16, 10, 16));
         VBox.setVgrow(content, Priority.ALWAYS);
 
         Tab tab = new Tab(text("tab.overview"), content);
         return tab;
+    }
+
+    private HBox compactProjectSummary() {
+        var dashboard = viewModel.dashboard();
+        Label projectName = new Label();
+        projectName.textProperty().bind(dashboard.projectNameProperty());
+        projectName.getStyleClass().add("toolbar-project-name");
+
+        Label files = compactMetric(text("dashboard.files"), dashboard.filesProperty());
+        Label nodes = compactMetric(text("dashboard.nodes"), dashboard.nodesProperty());
+        Label edges = compactMetric(text("dashboard.edges"), dashboard.edgesProperty());
+        Label problems = compactMetric(text("dashboard.problems"), dashboard.problemsProperty());
+        Label tasks = compactMetric(text("dashboard.tasks"), dashboard.tasksProperty());
+
+        HBox summary = new HBox(10, projectName, files, nodes, edges, problems, tasks);
+        summary.getStyleClass().add("toolbar-project-summary");
+        HBox.setHgrow(summary, Priority.ALWAYS);
+        return summary;
+    }
+
+    private Label compactMetric(String label, javafx.beans.value.ObservableNumberValue value) {
+        Label metric = new Label();
+        metric.textProperty().bind(Bindings.createStringBinding(
+                () -> value.intValue() + " " + label,
+                value
+        ));
+        metric.getStyleClass().add("toolbar-metric");
+        return metric;
     }
 
     private Tab graphTab() {
