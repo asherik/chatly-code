@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public final class ArchitectureAnalyzer {
 
     private static final int VIEW_PADDING_X = 90;
-    private static final int VIEW_PADDING_Y = 70;
+    private static final int VIEW_PADDING_Y = 150;
 
     public ArchitectureSummary analyze(CodeGraph graph) {
         Map<String, Long> packageCounts = graph.nodes().stream()
@@ -214,9 +214,9 @@ public final class ArchitectureAnalyzer {
         builder.append("                color #0f172a\n");
         builder.append("                stroke #1168bd\n");
         builder.append("                strokeWidth 2\n");
-        builder.append("                width 280\n");
-        builder.append("                height 86\n");
-        builder.append("                fontSize 19\n");
+        builder.append("                width 220\n");
+        builder.append("                height 66\n");
+        builder.append("                fontSize 15\n");
         builder.append("                metadata false\n");
         builder.append("                description false\n");
         builder.append("                shape RoundedBox\n");
@@ -225,21 +225,21 @@ public final class ArchitectureAnalyzer {
         builder.append("                color #0f172a\n");
         builder.append("                stroke #1168bd\n");
         builder.append("                strokeWidth 2\n");
-        builder.append("                fontSize 18\n");
+        builder.append("                fontSize 14\n");
         builder.append("                metadata false\n");
         builder.append("                description false\n");
         builder.append("            }\n");
         builder.append("            element \"Person\" {\n");
                 builder.append("                shape Person\n");
         builder.append("                background #ffffff\n");
-        builder.append("                width 240\n");
-        builder.append("                height 86\n");
+        builder.append("                width 190\n");
+        builder.append("                height 66\n");
         builder.append("            }\n");
         builder.append("            element \"Database\" {\n");
         builder.append("                shape Cylinder\n");
         builder.append("                background #eaf2fb\n");
-        builder.append("                width 280\n");
-        builder.append("                height 92\n");
+        builder.append("                width 220\n");
+        builder.append("                height 72\n");
         builder.append("            }\n");
         builder.append("            element \"UI\" {\n");
         builder.append("                background #ffffff\n");
@@ -250,9 +250,9 @@ public final class ArchitectureAnalyzer {
         builder.append("            element \"Component\" {\n");
         builder.append("                background #f8fafc\n");
         builder.append("                stroke #64748b\n");
-        builder.append("                width 260\n");
-        builder.append("                height 82\n");
-        builder.append("                fontSize 18\n");
+        builder.append("                width 210\n");
+        builder.append("                height 64\n");
+        builder.append("                fontSize 14\n");
         builder.append("                metadata false\n");
         builder.append("                description false\n");
         builder.append("                shape RoundedBox\n");
@@ -507,18 +507,18 @@ public final class ArchitectureAnalyzer {
             return List.of();
         }
 
-        int sourceCenterX = source.getX() + 140;
-        int sourceCenterY = source.getY() + 43;
-        int destinationCenterX = destination.getX() + 140;
-        int destinationCenterY = destination.getY() + 43;
+        int sourceCenterX = source.getX() + 110;
+        int sourceCenterY = source.getY() + 33;
+        int destinationCenterX = destination.getX() + 110;
+        int destinationCenterY = destination.getY() + 33;
         int distanceX = Math.abs(destinationCenterX - sourceCenterX);
         if (distanceX < 460) {
             return List.of();
         }
 
         int laneY = laneY(sourceCenterY, destinationCenterY, index);
-        int sourceLaneX = sourceCenterX < destinationCenterX ? source.getX() + 380 : source.getX() - 100;
-        int destinationLaneX = sourceCenterX < destinationCenterX ? destination.getX() - 100 : destination.getX() + 380;
+        int sourceLaneX = sourceCenterX < destinationCenterX ? source.getX() + 310 : source.getX() - 90;
+        int destinationLaneX = sourceCenterX < destinationCenterX ? destination.getX() - 90 : destination.getX() + 310;
         return List.of(
                 new Vertex(sourceLaneX, laneY),
                 new Vertex(destinationLaneX, laneY)
