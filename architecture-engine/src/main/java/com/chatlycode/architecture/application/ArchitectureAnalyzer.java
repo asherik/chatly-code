@@ -17,6 +17,7 @@ import com.structurizr.view.ElementView;
 import com.structurizr.view.ModelView;
 import com.structurizr.view.RelationshipView;
 import com.structurizr.view.SystemContextView;
+import com.structurizr.view.Vertex;
 
 import java.io.StringWriter;
 import java.nio.file.Path;
@@ -31,6 +32,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public final class ArchitectureAnalyzer {
+
+    private static final int VIEW_PADDING_X = 90;
+    private static final int VIEW_PADDING_Y = 70;
 
     public ArchitectureSummary analyze(CodeGraph graph) {
         Map<String, Long> packageCounts = graph.nodes().stream()
@@ -49,7 +53,9 @@ public final class ArchitectureAnalyzer {
         List<ArchitectureContainer> containers = containers(topPackages, idsByModule);
         List<ArchitectureRelationship> relationships = relationships(graph, idsByModule);
         Map<String, List<ComponentCandidate>> componentsByContainerId = componentsByContainerId(graph, idsByModule);
-        String structurizrDsl = structurizrDsl(graph, containers, relationships, componentsByContainerId);
+        String structurizrDsl = containers.isEmpty()
+                ? ""
+                : structurizrDsl(graph, containers, relationships, componentsByContainerId);
 
         return new ArchitectureSummary(
                 graph.files().size(),
@@ -59,7 +65,7 @@ public final class ArchitectureAnalyzer {
                 containers,
                 relationships,
                 structurizrDsl,
-                structurizrJson(structurizrDsl)
+                structurizrDsl.isBlank() ? "" : structurizrJson(structurizrDsl)
         );
     }
 
@@ -86,7 +92,7 @@ public final class ArchitectureAnalyzer {
         String normalized = path.toString().replace('\\', '/');
         String[] parts = normalized.split("/");
         if (parts.length >= 3 && parts[1].equals("src")) {
-            return parts[0] + "/src/" + parts[2];
+            return parts[0];
         }
         if (parts.length >= 4 && parts[0].equals("packages")) {
             return parts[0] + "/" + parts[1] + "/" + parts[2];
@@ -138,7 +144,7 @@ public final class ArchitectureAnalyzer {
         builder.append("workspace \"").append(escape(projectName(graph))).append("\" \"Architecture inferred from the indexed code graph.\" {\n\n");
         builder.append("    model {\n");
         builder.append("        user = person \"Developer\" \"Maintains and evolves the project\"\n");
-        builder.append("        project = softwareSystem \"").append(escape(projectName(graph))).append("\" \"Indexed local codebase\" {\n");
+        builder.append("        project = softwareSystem \"").append(escape(softwareSystemName(graph))).append("\" \"Indexed local codebase\" {\n");
         for (ArchitectureContainer container : containers) {
             builder.append("            ").append(container.id()).append(" = container \"")
                     .append(escape(container.name())).append("\" \"").append(escape(container.description())).append("\" \"")
@@ -173,10 +179,20 @@ public final class ArchitectureAnalyzer {
         builder.append("        systemContext project \"SystemContext\" {\n");
         builder.append("            include *\n");
         builder.append("            autoLayout lr\n");
+        builder.append("            properties {\n");
+        builder.append("                \"structurizr.title\" \"false\"\n");
+        builder.append("                \"structurizr.metadata\" \"false\"\n");
+        builder.append("                \"structurizr.description\" \"false\"\n");
+        builder.append("            }\n");
         builder.append("        }\n\n");
         builder.append("        container project \"Containers\" {\n");
         builder.append("            include *\n");
         builder.append("            autoLayout lr\n");
+        builder.append("            properties {\n");
+        builder.append("                \"structurizr.title\" \"false\"\n");
+        builder.append("                \"structurizr.metadata\" \"false\"\n");
+        builder.append("                \"structurizr.description\" \"false\"\n");
+        builder.append("            }\n");
         builder.append("        }\n\n");
         for (ArchitectureContainer container : containers) {
             if (componentsByContainerId.getOrDefault(container.id(), List.of()).isEmpty()) {
@@ -186,48 +202,65 @@ public final class ArchitectureAnalyzer {
                     .append(container.id()).append("\" {\n");
             builder.append("            include *\n");
             builder.append("            autoLayout lr\n");
+            builder.append("            properties {\n");
+            builder.append("                \"structurizr.title\" \"false\"\n");
+            builder.append("                \"structurizr.metadata\" \"false\"\n");
+            builder.append("                \"structurizr.description\" \"false\"\n");
+            builder.append("            }\n");
             builder.append("        }\n\n");
         }
         builder.append("        styles {\n");
         builder.append("            element \"Element\" {\n");
         builder.append("                color #0f172a\n");
-        builder.append("                stroke #2563eb\n");
-        builder.append("                strokeWidth 3\n");
-        builder.append("                width 260\n");
-        builder.append("                height 130\n");
-        builder.append("                fontSize 22\n");
+        builder.append("                stroke #1168bd\n");
+        builder.append("                strokeWidth 2\n");
+        builder.append("                width 280\n");
+        builder.append("                height 86\n");
+        builder.append("                fontSize 19\n");
+        builder.append("                metadata false\n");
+        builder.append("                description false\n");
         builder.append("                shape RoundedBox\n");
+        builder.append("            }\n");
+        builder.append("            element \"Software System\" {\n");
+        builder.append("                color #0f172a\n");
+        builder.append("                stroke #1168bd\n");
+        builder.append("                strokeWidth 2\n");
+        builder.append("                fontSize 18\n");
+        builder.append("                metadata false\n");
+        builder.append("                description false\n");
         builder.append("            }\n");
         builder.append("            element \"Person\" {\n");
                 builder.append("                shape Person\n");
-        builder.append("                background #f8fafc\n");
-        builder.append("                width 210\n");
-        builder.append("                height 110\n");
+        builder.append("                background #ffffff\n");
+        builder.append("                width 240\n");
+        builder.append("                height 86\n");
         builder.append("            }\n");
         builder.append("            element \"Database\" {\n");
         builder.append("                shape Cylinder\n");
-        builder.append("                background #dbeafe\n");
-        builder.append("                width 260\n");
-        builder.append("                height 140\n");
+        builder.append("                background #eaf2fb\n");
+        builder.append("                width 280\n");
+        builder.append("                height 92\n");
         builder.append("            }\n");
         builder.append("            element \"UI\" {\n");
-        builder.append("                background #dcfce7\n");
+        builder.append("                background #ffffff\n");
         builder.append("            }\n");
         builder.append("            element \"Core\" {\n");
-        builder.append("                background #fef3c7\n");
+        builder.append("                background #fff4c2\n");
         builder.append("            }\n");
         builder.append("            element \"Component\" {\n");
         builder.append("                background #f8fafc\n");
         builder.append("                stroke #64748b\n");
-        builder.append("                width 250\n");
-        builder.append("                height 120\n");
+        builder.append("                width 260\n");
+        builder.append("                height 82\n");
         builder.append("                fontSize 18\n");
+        builder.append("                metadata false\n");
+        builder.append("                description false\n");
         builder.append("                shape RoundedBox\n");
         builder.append("            }\n");
         builder.append("            relationship \"Relationship\" {\n");
-        builder.append("                color #64748b\n");
+        builder.append("                color #6b7c93\n");
         builder.append("                dashed true\n");
-        builder.append("                thickness 2\n");
+        builder.append("                thickness 1\n");
         builder.append("            }\n");
         builder.append("        }\n");
         builder.append("    }\n\n");
@@ -278,16 +311,67 @@ public final class ArchitectureAnalyzer {
 
     private void layoutContainerView(ContainerView view) {
         view.disableAutomaticLayout();
-        view.setDimensions(new Dimensions(1420, 860));
         List<ElementView> people = sortedElements(view.getElements()).stream().filter(this::isPerson).toList();
-        List<ElementView> ui = sortedElements(view.getElements()).stream().filter(element -> !isPerson(element) && isUi(element)).toList();
-        List<ElementView> core = sortedElements(view.getElements()).stream().filter(element -> !isPerson(element) && !isUi(element) && !isStorage(element)).toList();
-        List<ElementView> storage = sortedElements(view.getElements()).stream().filter(element -> !isPerson(element) && isStorage(element)).toList();
+        List<ElementView> containers = sortedElements(view.getElements()).stream()
+                .filter(element -> !isPerson(element))
+                .toList();
+        placeColumn(people, 60 + VIEW_PADDING_X, 300 + VIEW_PADDING_Y, 150);
+        if (containers.size() <= 1) {
+            view.setDimensions(new Dimensions(1200 + VIEW_PADDING_X * 2, 620 + VIEW_PADDING_Y * 2));
+            placeGrid(containers, 520 + VIEW_PADDING_X, 260 + VIEW_PADDING_Y, 1, 300, 150);
+            routeRelationships(view);
+            return;
+        }
 
-        placeColumn(people, 60, 350, 190);
-        placeColumn(ui, 340, 140, 185);
-        placeColumn(core, 690, 90, 170);
-        placeColumn(storage, 1080, 220, 190);
+        ElementView hub = hubElement(containers, view.getRelationships());
+        Map<String, ElementView> elementsById = containers.stream()
+                .collect(Collectors.toMap(element -> element.getElement().getId(), element -> element));
+        Set<String> downstreamIds = view.getRelationships().stream()
+                .filter(relationship -> relationship.getRelationship().getSourceId().equals(hub.getElement().getId()))
+                .map(relationship -> relationship.getRelationship().getDestinationId())
+                .filter(elementsById::containsKey)
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Set<String> upstreamIds = view.getRelationships().stream()
+                .filter(relationship -> relationship.getRelationship().getDestinationId().equals(hub.getElement().getId()))
+                .map(relationship -> relationship.getRelationship().getSourceId())
+                .filter(elementsById::containsKey)
+                .filter(id -> !downstreamIds.contains(id))
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        List<ElementView> downstream = sortedElementsById(downstreamIds, elementsById);
+        List<ElementView> upstream = sortedElementsById(upstreamIds, elementsById);
+        Set<String> placedIds = new java.util.HashSet<>();
+        placedIds.add(hub.getElement().getId());
+        placedIds.addAll(upstreamIds);
+        placedIds.addAll(downstreamIds);
+        List<ElementView> remaining = containers.stream()
+                .filter(element -> !placedIds.contains(element.getElement().getId()))
+                .toList();
+
+        List<ElementView> rightSide = new ArrayList<>();
+        rightSide.addAll(downstream);
+        rightSide.addAll(remaining.stream()
+                .filter(element -> rightSide.stream()
+                        .noneMatch(existing -> existing.getElement().getId().equals(element.getElement().getId())))
+                .toList());
+
+        int hubY = 300 + VIEW_PADDING_Y;
+        int leftRows = upstream.size() <= 3 ? upstream.size() : (int) Math.ceil(upstream.size() / 2.0);
+        int rightColumns = rightSide.size() <= 6 ? 1 : 2;
+        int rightRows = (int) Math.ceil(rightSide.size() / (double) rightColumns);
+        int tallestColumn = Math.max(Math.max(leftRows, rightRows), people.size());
+        view.setDimensions(new Dimensions(
+                1760 + VIEW_PADDING_X * 2,
+                Math.max(740, 260 + Math.max(3, tallestColumn) * 145) + VIEW_PADDING_Y * 2
+        ));
+        hub.setX(700 + VIEW_PADDING_X);
+        hub.setY(hubY);
+        if (upstream.size() <= 3) {
+            placeColumn(upstream, 120 + VIEW_PADDING_X, centerStartY(upstream.size(), 205, hubY), 205);
+        } else {
+            placeBalanced(upstream, 100 + VIEW_PADDING_X, 120 + VIEW_PADDING_Y, 440 + VIEW_PADDING_X, 170);
+        }
+        placeGrid(rightSide, 1200 + VIEW_PADDING_X, centerStartY(rightRows, 145, hubY), rightColumns, 340, 145);
         routeRelationships(view);
     }
 
@@ -317,20 +401,141 @@ public final class ArchitectureAnalyzer {
         }
     }
 
+    private void placeGrid(List<ElementView> elements, int startX, int startY, int columns, int gapX, int gapY) {
+        for (int index = 0; index < elements.size(); index++) {
+            ElementView element = elements.get(index);
+            int column = index % columns;
+            int row = index / columns;
+            element.setX(startX + column * gapX);
+            element.setY(startY + row * gapY);
+        }
+    }
+
     private List<ElementView> sortedElements(Set<ElementView> elements) {
         return elements.stream()
                 .sorted(Comparator.comparing(element -> element.getElement().getName()))
                 .toList();
     }
 
+    private ElementView hubElement(List<ElementView> elements, Set<RelationshipView> relationships) {
+        Set<String> elementIds = elements.stream()
+                .map(element -> element.getElement().getId())
+                .collect(Collectors.toSet());
+        Map<String, Integer> incoming = new HashMap<>();
+        Map<String, Integer> outgoing = new HashMap<>();
+        for (RelationshipView relationship : relationships) {
+            String sourceId = relationship.getRelationship().getSourceId();
+            String destinationId = relationship.getRelationship().getDestinationId();
+            if (elementIds.contains(sourceId)) {
+                outgoing.merge(sourceId, 1, Integer::sum);
+            }
+            if (elementIds.contains(destinationId)) {
+                incoming.merge(destinationId, 1, Integer::sum);
+            }
+        }
+        return elements.stream()
+                .max(Comparator
+                        .comparingInt((ElementView element) -> hubScore(element, incoming, outgoing))
+                        .thenComparing(element -> element.getElement().getName()))
+                .orElse(elements.get(0));
+    }
+
+    private int hubScore(ElementView element, Map<String, Integer> incoming, Map<String, Integer> outgoing) {
+        String id = element.getElement().getId();
+        int in = incoming.getOrDefault(id, 0);
+        int out = outgoing.getOrDefault(id, 0);
+        return Math.min(in, out) * 12 + in + out;
+    }
+
+    private List<ElementView> sortedElementsById(Set<String> ids, Map<String, ElementView> elementsById) {
+        return ids.stream()
+                .map(elementsById::get)
+                .filter(element -> element != null)
+                .sorted(Comparator.comparing(element -> element.getElement().getName()))
+                .toList();
+    }
+
+    private void placeBalanced(List<ElementView> elements, int leftX, int topY, int rightX, int gapY) {
+        int leftCount = (int) Math.ceil(elements.size() / 2.0);
+        for (int index = 0; index < elements.size(); index++) {
+            ElementView element = elements.get(index);
+            if (index < leftCount) {
+                element.setX(leftX);
+                element.setY(topY + index * gapY);
+            } else {
+                element.setX(rightX);
+                element.setY(topY + (index - leftCount) * gapY);
+            }
+        }
+    }
+
+    private int centerStartY(int count, int gapY, int centerY) {
+        if (count <= 0) {
+            return centerY;
+        }
+        return centerY - ((count - 1) * gapY / 2);
+    }
+
+    private int remainingStartY(int remainingCount, int upstreamCount) {
+        if (remainingCount <= 0) {
+            return 420;
+        }
+        return upstreamCount >= 4 ? 435 : 390;
+    }
+
     private void routeRelationships(ModelView view) {
+        Map<String, ElementView> elementsById = view.getElements().stream()
+                .collect(Collectors.toMap(element -> element.getElement().getId(), element -> element, (a, b) -> a));
         int index = 0;
         for (RelationshipView relationship : view.getRelationships()) {
-            relationship.setRouting(com.structurizr.view.Routing.Orthogonal);
-            relationship.setPosition(50);
-            relationship.setVertices(List.of());
+            relationship.setRouting(com.structurizr.view.Routing.Curved);
+            relationship.setJump(true);
+            relationship.setPosition(35 + (index % 4) * 10);
+            relationship.setVertices(verticesForRelationship(relationship, elementsById, index));
             relationship.setOrder(String.format("%03d", index++));
         }
+    }
+
+    private List<Vertex> verticesForRelationship(
+            RelationshipView relationship,
+            Map<String, ElementView> elementsById,
+            int index
+    ) {
+        ElementView source = elementsById.get(relationship.getRelationship().getSourceId());
+        ElementView destination = elementsById.get(relationship.getRelationship().getDestinationId());
+        if (source == null || destination == null) {
+            return List.of();
+        }
+
+        int sourceCenterX = source.getX() + 140;
+        int sourceCenterY = source.getY() + 43;
+        int destinationCenterX = destination.getX() + 140;
+        int destinationCenterY = destination.getY() + 43;
+        int distanceX = Math.abs(destinationCenterX - sourceCenterX);
+        if (distanceX < 460) {
+            return List.of();
+        }
+
+        int laneY = laneY(sourceCenterY, destinationCenterY, index);
+        int sourceLaneX = sourceCenterX < destinationCenterX ? source.getX() + 380 : source.getX() - 100;
+        int destinationLaneX = sourceCenterX < destinationCenterX ? destination.getX() - 100 : destination.getX() + 380;
+        return List.of(
+                new Vertex(sourceLaneX, laneY),
+                new Vertex(destinationLaneX, laneY)
+        );
+    }
+
+    private int laneY(int sourceCenterY, int destinationCenterY, int index) {
+        int offset = 82 + (index % 4) * 26;
+        if (destinationCenterY < sourceCenterY - 24) {
+            return Math.min(sourceCenterY, destinationCenterY) - offset;
+        }
+        if (destinationCenterY > sourceCenterY + 24) {
+            return Math.max(sourceCenterY, destinationCenterY) + offset;
+        }
+        return index % 2 == 0
+                ? Math.min(sourceCenterY, destinationCenterY) - offset
+                : Math.max(sourceCenterY, destinationCenterY) + offset;
     }
 
     private boolean isPerson(ElementView element) {
@@ -377,10 +582,10 @@ public final class ArchitectureAnalyzer {
         List<ArchitectureRelationship> result = new ArrayList<>();
         counts.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue(Comparator.reverseOrder()).thenComparing(Map.Entry.comparingByKey()))
-                .limit(16)
+                .limit(10)
                 .forEach(entry -> {
                     String[] ids = entry.getKey().split(" -> ", 2);
-                    result.add(new ArchitectureRelationship(ids[0], ids[1], "Depends on", ""));
+                    result.add(new ArchitectureRelationship(ids[0], ids[1], "", ""));
                 });
         if (result.isEmpty()) {
             result.addAll(heuristicRelationships(idsByModule));
@@ -400,7 +605,7 @@ public final class ArchitectureAnalyzer {
                     result.add(new ArchitectureRelationship(
                             idsByModule.get(source),
                             idsByModule.get(target),
-                            "Depends on",
+                            "",
                             ""
                     ));
                 }
@@ -551,6 +756,11 @@ public final class ArchitectureAnalyzer {
 
     private String projectName(CodeGraph graph) {
         return graph.projectId() == null ? "Opened Project" : graph.projectId().value();
+    }
+
+    private String softwareSystemName(CodeGraph graph) {
+        String name = projectName(graph);
+        return name.startsWith("project_") ? "Project" : name;
     }
 
     private String technologyFor(String module) {

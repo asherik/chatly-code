@@ -106,8 +106,8 @@ public final class MainController {
     private Tab overviewTab() {
         GridPane metrics = new GridPane();
         metrics.getStyleClass().add("metrics");
-        metrics.setHgap(12);
-        metrics.setVgap(12);
+        metrics.setHgap(8);
+        metrics.setVgap(6);
         var dashboard = viewModel.dashboard();
         addMetric(metrics, 0, text("dashboard.files"), dashboard.filesProperty().asString());
         addMetric(metrics, 1, text("dashboard.nodes"), dashboard.nodesProperty().asString());
@@ -135,8 +135,8 @@ public final class MainController {
         projectName.textProperty().bind(dashboard.projectNameProperty());
         projectName.getStyleClass().add("project-name");
 
-        VBox content = new VBox(12, projectName, metrics, architectureTabs);
-        content.setPadding(new Insets(16));
+        VBox content = new VBox(8, projectName, metrics, architectureTabs);
+        content.setPadding(new Insets(10, 16, 10, 16));
         VBox.setVgrow(content, Priority.ALWAYS);
 
         Tab tab = new Tab(text("tab.overview"), content);
@@ -523,7 +523,7 @@ public final class MainController {
         Label nameLabel = new Label(label);
         nameLabel.getStyleClass().add("metric-label");
 
-        VBox box = new VBox(4, valueLabel, nameLabel);
+        VBox box = new VBox(1, valueLabel, nameLabel);
         box.getStyleClass().add("metric");
         grid.add(box, column, 0);
     }

@@ -49,11 +49,35 @@ final class ArchitectureAnalyzerTest {
         assertTrue(summary.structurizrDsl().contains("shape Person"));
         assertTrue(summary.structurizrDsl().contains("shape Cylinder"));
         assertTrue(summary.structurizrDsl().contains("scope softwareSystem"));
-        assertTrue(summary.structurizrDsl().contains("desktop_src_main -> core_src_storage \"Depends on\""));
-        assertTrue(summary.structurizrDsl().contains("component desktop_src_main \"Components_desktop_src_main\""));
+        assertTrue(summary.structurizrDsl().contains("desktop -> core \"\""));
+        assertTrue(summary.structurizrDsl().contains("component desktop \"Components_desktop\""));
+        assertTrue(summary.structurizrDsl().contains("\"structurizr.title\" \"false\""));
+        assertTrue(summary.structurizrDsl().contains("\"structurizr.metadata\" \"false\""));
+        assertTrue(summary.structurizrDsl().contains("description false"));
+        assertFalse(summary.structurizrDsl().contains("src_main"));
         assertFalse(summary.structurizrDsl().contains("!identifiers hierarchical"));
         assertFalse(summary.structurizrJson().isBlank());
         assertTrue(summary.structurizrJson().contains("\"key\" : \"Containers\""));
+    }
+
+    @Test
+    void doesNotGenerateStructurizrWorkspaceForEmptyGraph() {
+        CodeGraph graph = new CodeGraph(
+                new ProjectId("empty-project"),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                new IndexResult(true, 0, 0, 0, 0, 0, List.of(), Duration.ofMillis(1)),
+                NOW
+        );
+
+        var summary = new ArchitectureAnalyzer().analyze(graph);
+
+        assertTrue(summary.containers().isEmpty());
+        assertTrue(summary.structurizrDsl().isBlank());
+        assertTrue(summary.structurizrJson().isBlank());
     }
 
     private static CodeNode node(String id, String name, String path) {

@@ -24,6 +24,10 @@ public final class ArchitectureDiagramView extends BorderPane {
             engine.loadContent(emptyHtml("Open a project to see the C4 architecture diagram."));
             return;
         }
+        if (architecture.fileCount() == 0 || architecture.containers().isEmpty()) {
+            engine.loadContent(emptyHtml("No indexed code was found for this project. Open the repository root instead of a service folder such as .idea."));
+            return;
+        }
         if (architecture.structurizrJson().isBlank()) {
             engine.loadContent(emptyHtml("C4 source was generated, but Structurizr JSON is empty. Open the C4 source tab to inspect the DSL."));
             return;
@@ -60,33 +64,52 @@ public final class ArchitectureDiagramView extends BorderPane {
                     <link href="%1$scss/structurizr.css" rel="stylesheet">
                     <style>
                         html, body { margin: 0; width: 100%%; height: 100%%; overflow: hidden; font-family: Arial, sans-serif; }
-                        #diagram { position: absolute; inset: 0 0 46px 0; background: #ffffff; }
+                        body { background: #ffffff; color: #111827; }
+                        #titleBar {
+                            position: absolute; left: 0; right: 0; top: 0; height: 30px;
+                            display: flex; align-items: center; gap: 10px; padding: 0 10px;
+                            border-bottom: 1px solid #eeeeee; box-sizing: border-box; background: #ffffff;
+                            z-index: 10;
+                        }
+                        #title {
+                            flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                            color: #111827; font-size: 18px; line-height: 30px; font-weight: 400;
+                        }
+                        #diagram { position: absolute; inset: 30px 0 0 0; background: #ffffff; }
                         #toolbar {
-                            position: absolute; left: 0; right: 0; bottom: 0; height: 46px;
-                            display: flex; align-items: center; gap: 8px; padding: 0 12px;
-                            border-top: 1px solid #d7dce3; background: rgba(255, 255, 255, 0.96);
+                            position: absolute; right: 28px; bottom: 26px;
+                            display: flex; align-items: center; gap: 8px; padding: 0;
+                            background: transparent; z-index: 20;
                         }
                         button {
-                            width: 32px; height: 28px; border: 1px solid #cfd6e0; border-radius: 4px;
-                            background: #ffffff; color: #263244; font-size: 16px; cursor: pointer;
+                            width: 54px; height: 48px; border: 1px solid #edf0f3; border-radius: 8px;
+                            background: rgba(255, 255, 255, 0.82); color: #a3aab5; font-size: 20px; cursor: pointer;
+                            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
                         }
-                        button:hover { background: #f2f6fb; }
+                        button:hover { background: #ffffff; color: #5b6472; border-color: #d8dee6; }
                         select {
-                            height: 28px; max-width: 360px; border: 1px solid #cfd6e0; border-radius: 4px;
-                            background: #ffffff; color: #263244; font-size: 12px;
+                            flex: 0 0 auto; height: 24px; max-width: 260px; border: 1px solid #eeeeee; border-radius: 5px;
+                            background: #ffffff; color: #6b7280; font-size: 12px; opacity: 0.72;
                         }
-                        #title { margin-left: 8px; color: #334155; font-size: 12px; white-space: nowrap; }
+                        select:hover, select:focus { opacity: 1; border-color: #d8dee6; outline: none; }
+                        .structurizrDiagramTitle,
+                        .structurizrDiagramDescription,
+                        .structurizrDiagramMetadata { display: none !important; }
+                        .structurizrNavigation { display: none !important; }
+                        .structurizrDiagramViewport { overflow: hidden !important; }
                         #error { padding: 18px; color: #9f1239; font-size: 13px; }
                     </style>
                 </head>
                 <body>
+                    <div id="titleBar">
+                        <div id="title">Structurizr C4 View</div>
+                        <select id="viewSelector" title="C4 view"></select>
+                    </div>
                     <div id="diagram"></div>
                     <div id="toolbar">
                         <button id="zoomOutButton" title="Zoom out">-</button>
                         <button id="zoomInButton" title="Zoom in">+</button>
-                        <button id="fitButton" title="Fit content">Fit</button>
-                        <select id="viewSelector" title="C4 view"></select>
-                        <span id="title">Structurizr C4 View</span>
+                        <button id="fitButton" title="Fit content">&#9633;</button>
                     </div>
                     <script>
                         function decodeUtf8Base64(value) {
@@ -116,25 +139,73 @@ public final class ArchitectureDiagramView extends BorderPane {
                                 return (order[a.type] || 9) - (order[b.type] || 9) || a.key.localeCompare(b.key);
                             });
                             views.forEach(function(view) {
-                                const label = view.type + ': ' + (view.title || view.name || view.key);
+                                const label = displayNameForView(view);
                                 viewSelector.append($('<option></option>').attr('value', view.key).text(label));
                             });
+                            if (views.length <= 1) {
+                                viewSelector.hide();
+                            }
+
+                            function updateTitle(viewKey) {
+                                const view = structurizr.workspace.findViewByKey(viewKey);
+                                if (!view) {
+                                    $('#title').text('Structurizr C4 View');
+                                    return;
+                                }
+                                const type = view.type === 'Container' ? 'Container View'
+                                        : view.type === 'SystemContext' ? 'System Context View'
+                                        : view.type === 'Component' ? 'Component View'
+                                        : view.type + ' View';
+                                const name = displayNameForView(view);
+                                if (name.startsWith(type + ': ')) {
+                                    $('#title').text(name + ' (#' + view.key + ')');
+                                } else {
+                                    $('#title').text(type + ': ' + name + ' (#' + view.key + ')');
+                                }
+                            }
+
+                            function displayNameForView(view) {
+                                let name = view.name || view.title || view.key;
+                                const prefixes = ['Container View: ', 'System Context View: ', 'Component View: '];
+                                prefixes.forEach(function(prefix) {
+                                    if (name.startsWith(prefix)) {
+                                        name = name.substring(prefix.length);
+                                    }
+                                });
+                                return name;
+                            }
+
+                            function fitDiagram() {
+                                window.setTimeout(function() { diagram.zoomFitContent(); }, 120);
+                                window.setTimeout(function() { diagram.zoomFitContent(); }, 420);
+                                window.setTimeout(function() {
+                                    $('.structurizrDiagramTitle,.structurizrDiagramDescription,.structurizrDiagramMetadata').hide();
+                                }, 520);
+                            }
 
                             const diagram = new structurizr.ui.Diagram('diagram', false, function() {
                                 const initial = structurizr.workspace.findViewByKey('Containers') ? 'Containers' : (views[0] ? views[0].key : undefined);
                                 if (initial) {
                                     viewSelector.val(initial);
+                                    updateTitle(initial);
                                     diagram.changeView(initial);
-                                    window.setTimeout(function() { diagram.zoomFitContent(); }, 300);
+                                    fitDiagram();
                                 }
                             });
                             $('#zoomOutButton').click(diagram.zoomOut);
                             $('#zoomInButton').click(diagram.zoomIn);
-                            $('#fitButton').click(diagram.zoomFitContent);
+                            $('#fitButton').click(fitDiagram);
                             viewSelector.change(function() {
-                                diagram.changeView($(this).val(), function() {
-                                    window.setTimeout(function() { diagram.zoomFitContent(); }, 150);
+                                const viewKey = $(this).val();
+                                updateTitle(viewKey);
+                                diagram.changeView(viewKey, function() {
+                                    fitDiagram();
                                 });
+                            });
+                            let resizeTimer;
+                            window.addEventListener('resize', function() {
+                                window.clearTimeout(resizeTimer);
+                                resizeTimer = window.setTimeout(fitDiagram, 180);
                             });
                         } catch (error) {
                             document.body.innerHTML = '<div id="error">Structurizr viewer failed: ' + error + '</div>';
